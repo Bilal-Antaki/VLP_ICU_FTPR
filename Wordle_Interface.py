@@ -5,7 +5,7 @@ from typing import List
 
 def main ():
     init(autoreset=True)
-    wordle = Wordle("APPLE")
+    wordle = Wordle("KILOS")
     
     while wordle.can_attempt:
         x = input ("\nEnter a guess: ")
