@@ -1,4 +1,4 @@
-from Wordle_Code import Wordle
+from wordle_code import Wordle
 
 def main ():
     wordle = Wordle("APPLE")
@@ -9,7 +9,8 @@ def main ():
 
     if wordle.is_solved:
         print("You have solved the wordle!")
-    
+    else:
+        print("You failed ")
 
 
 

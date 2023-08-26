@@ -1,3 +1,6 @@
+from letter_state import LetterState
+
+
 class Wordle:
     
     MAX_ATTEMPTS = 6
@@ -11,6 +14,16 @@ class Wordle:
     
     def attempt (self, word: str):
         self.attempts.append(word)
+
+    def guess (self, word: str):
+        result =[]
+
+        for i in range (self.WORD_LENGTH):
+            character = word[i]
+            letter = LetterState(character)
+            letter.is_in_word = character in self.state # TODO: make a more efficient data struct, not linear
+            letter.is_in_position = character == self.secret[i]
+        return []
 
     @property
     def is_solved (self):
