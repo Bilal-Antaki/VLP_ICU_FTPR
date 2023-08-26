@@ -1,1 +1,1 @@
-c
+import random as rd
