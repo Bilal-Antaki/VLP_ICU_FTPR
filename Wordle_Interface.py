@@ -3,13 +3,14 @@ from Wordle_Code import Wordle
 def main ():
     wordle = Wordle("APPLE")
     
-
-    while True:
+    while wordle.can_attempt:
         x = input ("Enter a guess: ")
-        if x == wordle.secret:
-            print ("You guessed the correct word!")
-            break
-        print ("Wrong, try again.")
+        wordle.attempt(x)
+
+    if wordle.is_solved:
+        print("You have solved the wordle!")
+    
+
 
 
 if __name__ == "__main__":
