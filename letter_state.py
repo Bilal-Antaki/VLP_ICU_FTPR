@@ -5,5 +5,5 @@ class LetterState:
         self.is_in_position: bool = False
 
     def __repr__(self) -> str:
-        return f"[{self.character} in the word: {self.is_in_word} in position: {self.is_in_position}]"
+        return f"[{self.character} in word: {self.is_in_word} in position: {self.is_in_position}]"
         
