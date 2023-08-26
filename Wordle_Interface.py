@@ -1,14 +1,16 @@
 from wordle_code import Wordle
-from colorama import Fore
+from colorama import Fore, init
+
 
 def main ():
-    wordle = Wordle("APPLE")
+    init(autoreset=True)
+    wordle = Wordle("LATER")
     
     while wordle.can_attempt:
         x = input ("Enter a guess: ")
 
         if len(x) != wordle.WORD_LENGTH:
-            print(Fore.RED + f"Word must be of {wordle.WORD_LENGTH} characters long." + Fore.DEFAULT)
+            print(f"Word must be of {wordle.WORD_LENGTH} characters long.")
             continue
 
         x = x.upper()
