@@ -3,16 +3,21 @@ from wordle_code import Wordle
 from colorama import Fore, init
 from typing import List
 import random as rd
+import time
 
 def main ():
+    start_time = time.time()
     init(autoreset=True)
     
     word_set = load_word_set("Data\wordle_words.txt")
     secret_word = rd.choice(list(word_set))
     wordle = Wordle(secret_word)
     
+    print(secret_word)
+
     while wordle.can_attempt:
         x = input ("\nEnter a guess: ")
+        x = x.upper()
 
         if len(x) != wordle.WORD_LENGTH:
             print(Fore.RED + f"Word must be of {wordle.WORD_LENGTH} characters long.")
@@ -22,7 +27,6 @@ def main ():
             print(Fore.RED + f"{x} is not a valid word.")
             continue
 
-        x = x.upper()
         wordle.attempt(x)
         display_results(wordle)
 
@@ -31,6 +35,8 @@ def main ():
     else:
         print("\nYou failed.\n")
         print(f"The secret word is {secret_word}.")
+    
+    print("--- %s seconds ---" % (time.time() - start_time))
 
 
 def display_results (wordle: Wordle):
