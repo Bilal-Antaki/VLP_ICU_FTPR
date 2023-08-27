@@ -2,18 +2,26 @@ from letter_state import LetterState
 from wordle_code import Wordle
 from colorama import Fore, init
 from typing import List
+import random as rd
 
 def main ():
     init(autoreset=True)
-    wordle = Wordle("KILOS")
+    
+    word_set = load_word_set("Data\wordle_words.txt")
+    secret_word = rd.choice(list(word_set))
+    wordle = Wordle(secret_word)
     
     while wordle.can_attempt:
         x = input ("\nEnter a guess: ")
 
         if len(x) != wordle.WORD_LENGTH:
-            print(f"Word must be of {wordle.WORD_LENGTH} characters long.")
+            print(Fore.RED + f"Word must be of {wordle.WORD_LENGTH} characters long.")
             continue
         
+        if not x in word_set:
+            print(Fore.RED + f"{x} is not a valid word.")
+            continue
+
         x = x.upper()
         wordle.attempt(x)
         display_results(wordle)
@@ -22,6 +30,7 @@ def main ():
         print("\nYou have solved the wordle!\n")
     else:
         print("\nYou failed.\n")
+        print(f"The secret word is {secret_word}.")
 
 
 def display_results (wordle: Wordle):
@@ -41,6 +50,18 @@ def display_results (wordle: Wordle):
     
     draw_border_around(lines)
 
+
+def load_word_set (path: str):
+    word_set = set()
+
+    with open(path, "r") as f:
+        for line in f.readlines():
+            word = line.strip().upper()
+            word_set.add(word)
+    
+    return word_set
+
+    pass
 
 def convert_result_to_color (result: List[LetterState]):
     result_with_color = []
