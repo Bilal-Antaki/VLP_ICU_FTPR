@@ -1,32 +1,42 @@
 import os
-import glob
 import pandas as pd
 import numpy as np
 
-def process_and_save_data(raw_path: str, processed_path: str, decimals: int = 5):
-    os.makedirs(processed_path, exist_ok=True)
-    file_paths = glob.glob(f"{raw_path}/*.csv")
-    for fp in file_paths:
-        df = pd.read_csv(fp, header=None)
-        # Compute new R (column 3)
-        R = np.hypot(df.iloc[:, 0], df.iloc[:, 1]).round(decimals)
-        # Shift old Output (col3) to col4
-        df.insert(3, 'OLD', df.iloc[:, 2])
-        # Replace col3 with R
-        df.iloc[:, 2] = R
-        # Save processed file
-        filename = os.path.basename(fp)
-        df.to_csv(os.path.join(processed_path, filename), header=False, index=False)
+# Constants for directories
+RAW_DATA_DIR = r"C:\Dev\Python\Position_Estimation_Code\data\raw"
+PROCESSED_DATA_DIR = r"C:\Dev\Python\Position_Estimation_Code\data\processed"
 
-def load_data(processed_path: str):
-    file_paths = glob.glob(f"{processed_path}/*.csv")
-    all_X, all_y = [], []
-    for fp in file_paths:
-        df = pd.read_csv(fp, header=None)
-        R = df.iloc[:, 2]
-        CIR = df.iloc[:, 3]
-        all_X.append(CIR.values.reshape(-1, 1))
-        all_y.append(R.values)
-    X = np.vstack(all_X)
-    y = np.hstack(all_y)
-    return X, y
+def compute_radius(x: float, y: float, decimals: int) -> float:
+    """Compute polar radius from x and y with rounding."""
+    return round(np.sqrt(x**2 + y**2), decimals)
+
+def process_file(filepath: str, output_dir: str, decimals: int) -> None:
+    """Process a single CSV file without headers to add polar radius and save it."""
+    df = pd.read_csv(filepath, header=None)
+    df.columns = ['X', 'Y', 'Measurement']  # Assign fixed column names
+
+    # Compute polar radius
+    df.insert(2, 'r', df.apply(lambda row: compute_radius(row['X'], row['Y'], decimals), axis=1))
+
+    # Reorder to: X, Y, r, Measurement
+    df = df[['X', 'Y', 'r', 'Measurement']]
+
+    # Save processed file
+    filename = os.path.basename(filepath)
+    output_path = os.path.join(output_dir, filename)
+    df.to_csv(output_path, index=False)
+
+
+def process_all_files(raw_dir: str, processed_dir: str, decimals: int) -> None:
+    """Process all CSV files in the raw data directory."""
+    if not os.path.exists(processed_dir):
+        os.makedirs(processed_dir)
+
+    for file in os.listdir(raw_dir):
+        if file.endswith(".csv"):
+            full_path = os.path.join(raw_dir, file)
+            try:
+                process_file(full_path, processed_dir, decimals)
+                print(f"Processed: {file}")
+            except Exception as e:
+                print(f"Error processing {file}: {e}")
