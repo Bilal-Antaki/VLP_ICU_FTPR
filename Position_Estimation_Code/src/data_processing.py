@@ -37,6 +37,5 @@ def process_all_files(raw_dir: str, processed_dir: str, decimals: int) -> None:
             full_path = os.path.join(raw_dir, file)
             try:
                 process_file(full_path, processed_dir, decimals)
-                print(f"Processed: {file}")
             except Exception as e:
                 print(f"Error processing {file}: {e}")
