@@ -4,7 +4,7 @@ from .linear import build_linear_model
 #from .mlp import build_mlp_model
 
 # Optional: import DL models if needed
-# from .lstm import build_lstm_model
+from .lstm import build_lstm_model
 # from .rnn import build_rnn_model
 
 MODEL_REGISTRY = {
@@ -13,7 +13,7 @@ MODEL_REGISTRY = {
     #"knn": build_knn_model,
     #"mlp": build_mlp_model,
     # "rnn": build_rnn_model,
-    # "lstm": build_lstm_model,
+    "lstm": build_lstm_model,
 }
 
 def get_model(name: str, **kwargs):
