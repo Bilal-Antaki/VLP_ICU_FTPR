@@ -140,16 +140,24 @@ def train_lstm_on_all(processed_dir: str, batch_size: int = 32, epochs: int = 10
     full_preds = y_scaler.inverse_transform(full_preds_scaled.reshape(-1, 1)).flatten()
     full_targets = y_scaler.inverse_transform(full_targets_scaled.reshape(-1, 1)).flatten()
     
-    # Final metrics
+    # FINAL RMSE ONLY
     rmse = np.sqrt(np.mean((full_targets - full_preds) ** 2))
-    mae = np.mean(np.abs(full_targets - full_preds))
     
     print(f"\nFinal Metrics:")
     print(f"RMSE: {rmse:.4f}")
-    print(f"MAE: {mae:.4f}")
     print(f"Prediction range: [{full_preds.min():.2f}, {full_preds.max():.2f}]")
     print(f"Target range: [{full_targets.min():.2f}, {full_targets.max():.2f}]")
     print(f"Prediction std: {np.std(full_preds):.4f}")
     print(f"Target std: {np.std(full_targets):.4f}")
     
-    return full_targets.tolist(), full_preds.tolist(), train_loss_hist, val_loss_hist
+    # Return additional info for size alignment
+    return {
+        'r_actual': full_targets.tolist(),
+        'r_pred': full_preds.tolist(),
+        'train_loss': train_loss_hist,
+        'val_loss': val_loss_hist,
+        'rmse': rmse,
+        'original_df_size': len(df),
+        'sequence_size': len(full_targets),
+        'seq_len': seq_len
+    }

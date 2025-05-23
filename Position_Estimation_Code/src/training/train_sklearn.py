@@ -1,24 +1,22 @@
 from src.models.model_registry import get_model, list_available_models
 from src.data.loader import load_cir_data, extract_features_and_target
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pandas as pd
 
 def train_single_model(model_name: str, X_train, X_test, y_train, y_test, **model_kwargs):
-    """Train a single sklearn model and return metrics"""
+    """Train a single sklearn model and return RMSE metrics only"""
     try:
         model = get_model(model_name, **model_kwargs)
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
         
-        # Calculate metrics
+        # Calculate RMSE only
         rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-        mae = mean_absolute_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
         
-        # Cross-validation score
+        # Cross-validation RMSE
         try:
             cv_scores = cross_val_score(model, X_train, y_train, cv=5, 
                                       scoring='neg_mean_squared_error')
@@ -30,8 +28,6 @@ def train_single_model(model_name: str, X_train, X_test, y_train, y_test, **mode
             'model': model,
             'y_pred': y_pred,
             'rmse': rmse,
-            'mae': mae,
-            'r2': r2,
             'cv_rmse': cv_rmse,
             'pred_std': np.std(y_pred),
             'pred_range': (np.min(y_pred), np.max(y_pred))
@@ -57,7 +53,7 @@ def train_linear_on_all(processed_dir: str):
 
 def train_all_sklearn_models(processed_dir: str, test_size: float = 0.2):
     """
-    Train and compare multiple sklearn models
+    Train and compare multiple sklearn models - RMSE only
     """
     print("Loading data...")
     df = load_cir_data(processed_dir, filter_keyword="FCPR-D1")
@@ -102,21 +98,18 @@ def train_all_sklearn_models(processed_dir: str, test_size: float = 0.2):
             result['model_type'] = model_name
             results.append(result)
             
-            print(f"  RMSE: {result['rmse']:.4f}, R²: {result['r2']:.4f}, "
-                  f"MAE: {result['mae']:.4f}")
+            print(f"  RMSE: {result['rmse']:.4f}")
             if result['cv_rmse']:
                 print(f"  CV-RMSE: {result['cv_rmse']:.4f}")
             print(f"  Pred range: [{result['pred_range'][0]:.2f}, {result['pred_range'][1]:.2f}]")
         print()
     
-    # Create results summary
+    # Create results summary - RMSE only
     if results:
         results_df = pd.DataFrame([
             {
                 'Model': r['name'],
                 'RMSE': r['rmse'],
-                'MAE': r['mae'],
-                'R²': r['r2'],
                 'CV-RMSE': r['cv_rmse'] if r['cv_rmse'] else np.nan,
                 'Pred_Std': r['pred_std'],
                 'Pred_Range': f"[{r['pred_range'][0]:.1f}, {r['pred_range'][1]:.1f}]"
@@ -125,23 +118,21 @@ def train_all_sklearn_models(processed_dir: str, test_size: float = 0.2):
         ]).round(4)
         
         print("=" * 80)
-        print("MODEL COMPARISON SUMMARY")
+        print("MODEL COMPARISON SUMMARY (RMSE ONLY)")
         print("=" * 80)
         print(results_df.to_string(index=False))
         
-        # Find best models
+        # Find best model by RMSE
         best_rmse = results_df.loc[results_df['RMSE'].idxmin()]
-        best_r2 = results_df.loc[results_df['R²'].idxmax()]
         
         print(f"\nBest RMSE: {best_rmse['Model']} ({best_rmse['RMSE']:.4f})")
-        print(f"Best R²:   {best_r2['Model']} ({best_r2['R²']:.4f})")
         
         return results, results_df
     
     return None, None
 
 def get_best_sklearn_model(processed_dir: str):
-    """Get the best performing sklearn model"""
+    """Get the best performing sklearn model by RMSE"""
     results, _ = train_all_sklearn_models(processed_dir)
     if results:
         best_result = min(results, key=lambda x: x['rmse'])
