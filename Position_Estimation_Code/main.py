@@ -25,8 +25,8 @@ if __name__ == "__main__":
         "r_pred_lstm": r_pred_lstm
     }).round(2)
 
-    print("\n[r_actual, r_pred_linear, r_pred_lstm]:")
-    print(df_compare.head(10))
+    #print("\n[r_actual, r_pred_linear, r_pred_lstm]:")
+    print(df_compare.head(min_len))
 
     # Plot loss
     plt.plot(train_loss, label="Train Loss")

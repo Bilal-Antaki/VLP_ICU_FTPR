@@ -9,7 +9,8 @@ import numpy as np
 
 def train_lstm_on_all(processed_dir: str, batch_size: int = 10, epochs: int = 55, lr: float = 0.001):
     seq_len=4
-    df = load_cir_data(processed_dir)
+    df = load_cir_data(processed_dir, filter_keyword="FCPR-D1")
+
     X_seq, y_seq, x_scaler, y_scaler = scale_and_sequence(df, seq_len=seq_len)
 
     X_train, X_val, y_train, y_val = train_test_split(X_seq, y_seq, test_size=0.2, random_state=42)
@@ -58,16 +59,20 @@ def train_lstm_on_all(processed_dir: str, batch_size: int = 10, epochs: int = 55
 
         if (epoch + 1) % 20 == 0 or epoch == 0:
             print(f"Epoch {epoch+1:03d}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}")
+    
+    # --- Predict on full input sequence set (not just val) ---
+    model.eval()
+    with torch.no_grad():
+        full_preds = model(X_seq.to(device)).cpu().numpy()
+        full_targets = y_seq.numpy()
+
+    # Inverse transform both
+    full_preds = y_scaler.inverse_transform(full_preds.reshape(-1, 1)).flatten()
+    full_targets = y_scaler.inverse_transform(full_targets.reshape(-1, 1)).flatten()
 
     rmse = np.sqrt(val_loss)
     print(f"\nFinal Validation RMSE: {rmse:.4f}")
-    df
-
-    y_val_actual = y_scaler.inverse_transform(np.array(y_val_actual).reshape(-1, 1)).flatten()
-    y_val_pred = y_scaler.inverse_transform(np.array(y_val_pred).reshape(-1, 1)).flatten()
-
-    print("LSTM predictions:", len(y_val_pred))
+    print("LSTM predictions:", len(full_preds))
     print("Expected:", len(df) - seq_len)
 
-
-    return y_val_actual, y_val_pred, train_loss_hist, val_loss_hist
+    return full_targets.tolist(), full_preds.tolist(), train_loss_hist, val_loss_hist

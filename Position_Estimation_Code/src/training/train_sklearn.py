@@ -6,7 +6,8 @@ import numpy as np
 
 
 def train_linear_on_all(processed_dir: str):
-    df = load_cir_data(processed_dir)
+    df = load_cir_data(processed_dir, filter_keyword="FCPR-D1")
+
     X, y = extract_features_and_target(df)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
