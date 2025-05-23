@@ -17,7 +17,7 @@ def train_linear_on_all(processed_dir: str):
     y_pred = model.predict(X_test)
 
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-    r2 = r2_score(y_test, y_pred)
 
     print(f"Linear Regression RMSE: {rmse:.4f}")
-    print(f"Linear Regression R²: {r2:.4f}")
+
+    return y_test.tolist(), y_pred.tolist()
