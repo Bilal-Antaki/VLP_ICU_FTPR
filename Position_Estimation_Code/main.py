@@ -28,7 +28,7 @@ if __name__ == "__main__":
     #print("\n[r_actual, r_pred_linear, r_pred_lstm]:")
     print(df_compare.head(min_len))
 
-    # Plot loss
+    """"" Plot loss
     plt.plot(train_loss, label="Train Loss")
     plt.plot(val_loss, label="Val Loss")
     plt.title("LSTM Loss")
@@ -37,3 +37,4 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True)
     plt.show()
+    """

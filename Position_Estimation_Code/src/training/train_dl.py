@@ -6,6 +6,7 @@ from src.models.model_registry import get_model
 from src.data.loader import load_cir_data
 from src.data.preprocessing import scale_and_sequence
 import numpy as np
+from sklearn.metrics import root_mean_squared_error
 
 def train_lstm_on_all(processed_dir: str, batch_size: int = 10, epochs: int = 55, lr: float = 0.001):
     seq_len=4
@@ -70,7 +71,8 @@ def train_lstm_on_all(processed_dir: str, batch_size: int = 10, epochs: int = 55
     full_preds = y_scaler.inverse_transform(full_preds.reshape(-1, 1)).flatten()
     full_targets = y_scaler.inverse_transform(full_targets.reshape(-1, 1)).flatten()
 
-    rmse = np.sqrt(val_loss)
+    rmse = root_mean_squared_error(full_targets, full_preds)
+
     print(f"\nFinal Validation RMSE: {rmse:.4f}")
     print("LSTM predictions:", len(full_preds))
     print("Expected:", len(df) - seq_len)
