@@ -1,5 +1,5 @@
 from .linear import build_linear_model
-#from .svr import build_svr_model
+from .svr import build_svr_model
 #from .knn import build_knn_model
 #from .mlp import build_mlp_model
 
@@ -9,7 +9,7 @@ from .lstm import build_lstm_model
 
 MODEL_REGISTRY = {
     "linear": build_linear_model,
-    #"svr": build_svr_model,
+    "svr": build_svr_model,
     #"knn": build_knn_model,
     #"mlp": build_mlp_model,
     # "rnn": build_rnn_model,
