@@ -6,6 +6,51 @@ from src.models.model_registry import get_model
 from src.data.loader import load_cir_data
 from src.data.preprocessing import scale_and_sequence
 import numpy as np
+import pandas as pd
+
+def print_comparison_dataframe(r_actual, r_pred, max_rows=20):
+    """
+    Print a comparison dataframe showing actual vs predicted values
+    
+    Args:
+        r_actual: Array of actual values
+        r_pred: Array of predicted values  
+        max_rows: Maximum number of rows to display (default: 20)
+    """
+    # Create comparison dataframe
+    comparison_df = pd.DataFrame({
+        'r_actual': r_actual,
+        'r_lstm': r_pred,
+        'error': r_actual - r_pred,
+        'abs_error': np.abs(r_actual - r_pred),
+        'pct_error': np.abs((r_actual - r_pred) / r_actual) * 100
+    })
+    
+    print(f"\n{'='*60}")
+    print("LSTM PREDICTIONS vs ACTUAL VALUES")
+    print(f"{'='*60}")
+    
+    # Show first few rows
+    print(f"First {min(max_rows//2, len(comparison_df))} rows:")
+    print(comparison_df.head(max_rows//2).round(4).to_string(index=True))
+    
+    if len(comparison_df) > max_rows:
+        print(f"\n... (showing {max_rows//2} of {len(comparison_df)} total rows) ...")
+        print(f"\nLast {min(max_rows//2, len(comparison_df))} rows:")
+        print(comparison_df.tail(max_rows//2).round(4).to_string(index=True))
+    
+    # Summary statistics
+    print(f"\n{'='*60}")
+    print("PREDICTION ERROR STATISTICS")
+    print(f"{'='*60}")
+    print(f"Mean Absolute Error:     {comparison_df['abs_error'].mean():.4f}")
+    print(f"Mean Percentage Error:   {comparison_df['pct_error'].mean():.2f}%")
+    print(f"Max Absolute Error:      {comparison_df['abs_error'].max():.4f}")
+    print(f"Min Absolute Error:      {comparison_df['abs_error'].min():.4f}")
+    print(f"Std of Errors:           {comparison_df['error'].std():.4f}")
+    print(f"{'='*60}")
+    
+    return comparison_df
 
 def train_lstm_on_all(processed_dir: str, batch_size: int = 32, epochs: int = 100, lr: float = 0.01):
     # Use longer sequences for better temporal patterns
@@ -58,7 +103,7 @@ def train_lstm_on_all(processed_dir: str, batch_size: int = 32, epochs: int = 10
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=10, verbose=True
+        optimizer, mode='min', factor=0.5, patience=10
     )
     
     train_loss_hist, val_loss_hist = [], []
@@ -111,7 +156,13 @@ def train_lstm_on_all(processed_dir: str, batch_size: int = 32, epochs: int = 10
         val_loss_hist.append(val_loss)
         
         # Learning rate scheduling
+        prev_lr = optimizer.param_groups[0]['lr']
         scheduler.step(val_loss)
+        new_lr = optimizer.param_groups[0]['lr']
+        
+        # Manual verbose output for learning rate changes
+        if new_lr != prev_lr:
+            print(f"  Learning rate reduced from {prev_lr:.6f} to {new_lr:.6f}")
         
         # Early stopping
         if val_loss < best_val_loss:
@@ -149,6 +200,9 @@ def train_lstm_on_all(processed_dir: str, batch_size: int = 32, epochs: int = 10
     print(f"Target range: [{full_targets.min():.2f}, {full_targets.max():.2f}]")
     print(f"Prediction std: {np.std(full_preds):.4f}")
     print(f"Target std: {np.std(full_targets):.4f}")
+    
+    # Create and print comparison dataframe
+    print_comparison_dataframe(full_targets, full_preds, max_rows=20)
     
     # Return additional info for size alignment
     return {
