@@ -151,7 +151,7 @@ def run_simple_comparison():
 
 if __name__ == "__main__":
     # Set this to control which mode to run
-    comprehensive_mode = False
+    comprehensive_mode = True
     
     if comprehensive_mode:
         run_comprehensive_comparison()

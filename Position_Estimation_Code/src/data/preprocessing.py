@@ -15,7 +15,7 @@ def scale_and_sequence(df, seq_len=10, features=['PL', 'RMS'], target='r'):
     """Improved scaling and sequencing for LSTM"""
     
     # Sort by position to ensure temporal consistency
-    df_sorted = df.sort_values(['X', 'Y']).reset_index(drop=True)
+    df_sorted = df.copy()
     
     X = df_sorted[features].values
     y = df_sorted[target].values
