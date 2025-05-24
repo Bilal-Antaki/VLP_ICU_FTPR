@@ -17,38 +17,38 @@ MODEL_REGISTRY = {
     # Linear models
     "linear": build_linear_model_simple,  # Keep simple for backwards compatibility
     "linear_advanced": build_linear_model,
-    "ridge": lambda **kwargs: build_linear_model(model_type='ridge', **kwargs),
-    "lasso": lambda **kwargs: build_linear_model(model_type='lasso', **kwargs),
-    "elastic": lambda **kwargs: build_linear_model(model_type='elastic', **kwargs),
-    "poly": lambda **kwargs: build_linear_model(model_type='poly', **kwargs),
+    #"ridge": lambda **kwargs: build_linear_model(model_type='ridge', **kwargs),
+    #"lasso": lambda **kwargs: build_linear_model(model_type='lasso', **kwargs),
+    #"elastic": lambda **kwargs: build_linear_model(model_type='elastic', **kwargs),
+    #"poly": lambda **kwargs: build_linear_model(model_type='poly', **kwargs),
     
     # SVR models
     "svr": build_svr_optimized,  # Use optimized version as default
     "svr_basic": build_svr_model,
-    "svr_linear": build_svr_linear,
+    #"svr_linear": build_svr_linear,
     "svr_poly": build_svr_poly,
     "svr_rbf": lambda **kwargs: build_svr_model(kernel='rbf', **kwargs),
     
     # KNN models
-    "knn": build_knn_optimized,
-    "knn_basic": build_knn_model,
-    "knn_uniform": lambda **kwargs: build_knn_model(weights='uniform', **kwargs),
-    "knn_distance": lambda **kwargs: build_knn_model(weights='distance', **kwargs),
+    #"knn": build_knn_optimized,
+    #"knn_basic": build_knn_model,
+    #"knn_uniform": lambda **kwargs: build_knn_model(weights='uniform', **kwargs),
+    #"knn_distance": lambda **kwargs: build_knn_model(weights='distance', **kwargs),
     
     # Neural Networks
-    "mlp": build_mlp_model,
-    "mlp_sklearn": build_mlp_sklearn,
-    "mlp_torch": build_mlp_torch,
+    #"mlp": build_mlp_model,
+    #"mlp_sklearn": build_mlp_sklearn,
+    #"mlp_torch": build_mlp_torch,
     
     # Tree-based Ensemble models
     "random_forest": build_random_forest,
     "rf": build_random_forest,  # Alias
     "gradient_boosting": build_gradient_boosting,
     "gb": build_gradient_boosting,  # Alias
-    "extra_trees": build_extra_trees,
-    "et": build_extra_trees,  # Alias
-    "adaboost": build_adaboost,
-    "ada": build_adaboost,  # Alias
+    #"extra_trees": build_extra_trees,
+    #"et": build_extra_trees,  # Alias
+    #"adaboost": build_adaboost,
+    #"ada": build_adaboost,  # Alias
     
     # Advanced Ensemble models
     "voting": build_voting_ensemble,

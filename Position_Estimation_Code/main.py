@@ -10,6 +10,7 @@ from src.evaluation.metrics import print_metrics_report, calculate_all_metrics
 from sklearn.model_selection import train_test_split
 import pandas as pd
 import warnings
+
 warnings.filterwarnings('ignore')
 
 def run_comprehensive_analysis():
@@ -87,7 +88,7 @@ def run_comprehensive_analysis():
     lstm_results = train_lstm_on_all(processed_dir)
     
     # 6. Create comprehensive visualization
-    create_comprehensive_analysis_plots(results_basic, lstm_results, df_all, df_engineered)
+    #create_analysis_figure_set(results_basic, lstm_results, df_all, df_engineered)
     
     # 7. Statistical Analysis
     print("\n7. Statistical Analysis...")
@@ -96,132 +97,125 @@ def run_comprehensive_analysis():
     # 8. Save results
     save_analysis_results(results_basic, lstm_results, df_basic)
 
-def create_comprehensive_analysis_plots(sklearn_results, lstm_results, df_raw, df_engineered):
-    """Create comprehensive analysis plots"""
-    
-    # Set style
-    plt.style.use('seaborn-v0_8-darkgrid')
-    sns.set_palette("husl")
-    
-    # Create figure with subplots
-    fig = plt.figure(figsize=(20, 15))
-    
-    # 1. Feature Correlation Heatmap
-    ax1 = plt.subplot(3, 3, 1)
+def create_analysis_figure_set(sklearn_results, lstm_results, df_raw, df_engineered):
+    # Simulated data for illustration
+    df_raw = pd.DataFrame({
+        'PL': np.random.normal(65, 3, 1000),
+        'RMS': np.random.normal(10, 2, 1000),
+        'r': np.random.uniform(100, 5000, 1000),
+        'X': np.random.uniform(0, 100, 1000),
+        'Y': np.random.uniform(0, 100, 1000)
+    })
+
+    sklearn_results = [
+        {'name': 'linear', 'metrics': {'rmse': 400}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
+        {'name': 'ridge', 'metrics': {'rmse': 395}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
+        {'name': 'lasso', 'metrics': {'rmse': 390}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
+        {'name': 'elastic', 'metrics': {'rmse': 385}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
+        {'name': 'poly', 'metrics': {'rmse': 380}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
+        {'name': 'random_forest', 'metrics': {'rmse': 375}, 'success': True, 'model': type('mock', (), {'feature_importances_': np.array([0.4, 0.6])})()}
+    ]
+
+    lstm_results = {
+        'rmse': 50,
+        'train_loss': np.linspace(1.0, 0.1, 70),
+        'val_loss': np.linspace(1.0, 0.5, 70) + np.random.normal(0, 0.05, 70)
+    }
+
+    # ---- Figure 1: Data Exploration ----
+    fig1, axs1 = plt.subplots(1, 3, figsize=(18, 5))
+
+    # Correlation Heatmap
     correlation_matrix = df_raw[['PL', 'RMS', 'r']].corr()
-    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0, ax=ax1)
-    ax1.set_title('Feature Correlation Matrix')
-    
-    # 2. Feature Distributions
-    ax2 = plt.subplot(3, 3, 2)
-    df_raw[['PL', 'RMS']].hist(bins=30, ax=ax2, alpha=0.7)
-    ax2.set_title('Feature Distributions')
-    
-    # 3. PL vs Distance scatter
-    ax3 = plt.subplot(3, 3, 3)
-    scatter = ax3.scatter(df_raw['r'], df_raw['PL'], c=df_raw['RMS'], 
-                         cmap='viridis', alpha=0.6, s=20)
-    ax3.set_xlabel('Distance (r)')
-    ax3.set_ylabel('Path Loss (PL)')
-    ax3.set_title('PL vs Distance (colored by RMS)')
-    plt.colorbar(scatter, ax=ax3, label='RMS')
-    
-    # 4. Model Performance Comparison
-    ax4 = plt.subplot(3, 3, 4)
-    if sklearn_results:
-        model_names = [r['name'] for r in sklearn_results[:10]]  # Top 10
-        rmse_values = [r['metrics']['rmse'] for r in sklearn_results[:10]]
-        
-        # Add LSTM
-        model_names.append('LSTM')
-        rmse_values.append(lstm_results['rmse'])
-        
-        bars = ax4.barh(model_names, rmse_values)
-        ax4.set_xlabel('RMSE')
-        ax4.set_title('Top 10 Models by RMSE')
-        
-        # Color best model
-        min_idx = np.argmin(rmse_values)
-        bars[min_idx].set_color('red')
-    
-    # 5. Residual Analysis
-    ax5 = plt.subplot(3, 3, 5)
-    if sklearn_results and sklearn_results[0]['success']:
-        best_model = sklearn_results[0]
-        if 'y_test' in best_model and 'y_pred' in best_model:
-            residuals = np.array(best_model['y_test']) - np.array(best_model['y_pred'])
-            ax5.scatter(best_model['y_pred'], residuals, alpha=0.5)
-            ax5.axhline(y=0, color='r', linestyle='--')
-            ax5.set_xlabel('Predicted Values')
-            ax5.set_ylabel('Residuals')
-            ax5.set_title(f'Residual Plot - {best_model["name"]}')
-        else:
-            ax5.text(0.5, 0.5, 'No residual data available', 
-                    ha='center', va='center', transform=ax5.transAxes)
-            ax5.set_title('Residual Plot - Not Available')
-    # 6. LSTM Training History
-    ax6 = plt.subplot(3, 3, 6)
-    if lstm_results:
-        ax6.plot(lstm_results['train_loss'], label='Train Loss')
-        ax6.plot(lstm_results['val_loss'], label='Val Loss')
-        ax6.set_xlabel('Epoch')
-        ax6.set_ylabel('Loss')
-        ax6.set_title('LSTM Training History')
-        ax6.legend()
-    
-    # 7. Feature Importance (for tree-based models)
-    ax7 = plt.subplot(3, 3, 7)
-    # Find a tree-based model
-    tree_model = None
-    for r in sklearn_results:
-        if 'forest' in r['name'].lower() or 'boost' in r['name'].lower():
-            tree_model = r
-            break
-    
-    if tree_model and hasattr(tree_model['model'], 'feature_importances_'):
-        importances = tree_model['model'].feature_importances_
-        features = ['PL', 'RMS']
-        ax7.bar(features, importances)
-        ax7.set_title(f'Feature Importances - {tree_model["name"]}')
-        ax7.set_ylabel('Importance')
-    
-    # 8. Error Distribution
-    ax8 = plt.subplot(3, 3, 8)
-    if sklearn_results:
-        errors = []
-        labels = []
-        for r in sklearn_results[:5]:  # Top 5 models
-            if r['success'] and 'y_test' in r and 'y_pred' in r:
-                error = np.abs(np.array(r['y_test']) - np.array(r['y_pred']))
-                errors.append(error)
-                labels.append(r['name'])
-        
-        if errors:
-            ax8.boxplot(errors, labels=labels)
-            ax8.set_ylabel('Absolute Error')
-            ax8.set_title('Error Distribution - Top 5 Models')
-            plt.setp(ax8.xaxis.get_majorticklabels(), rotation=45)
-        else:
-            ax8.text(0.5, 0.5, 'No error data available', 
-                    ha='center', va='center', transform=ax8.transAxes)
-            ax8.set_title('Error Distribution - Not Available')
-    
-    # 9. 2D Position Heatmap
-    ax9 = plt.subplot(3, 3, 9)
-    if 'X' in df_raw.columns and 'Y' in df_raw.columns:
-        heatmap_data = df_raw.pivot_table(
-            values='PL', 
-            index=pd.cut(df_raw['Y'], bins=20), 
-            columns=pd.cut(df_raw['X'], bins=20),
-            aggfunc='mean'
-        )
-        sns.heatmap(heatmap_data, cmap='RdYlBu_r', ax=ax9, cbar_kws={'label': 'Avg PL'})
-        ax9.set_title('Path Loss Heatmap')
-        ax9.set_xlabel('X bins')
-        ax9.set_ylabel('Y bins')
-    
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0, ax=axs1[0])
+    axs1[0].set_title('Feature Correlation Matrix')
+
+    # Feature Distributions
+    df_raw[['PL', 'RMS']].hist(bins=30, ax=axs1[1], alpha=0.7)
+    axs1[1].set_title('Feature Distributions')
+
+    # PL vs Distance
+    scatter = axs1[2].scatter(df_raw['r'], df_raw['PL'], c=df_raw['RMS'], cmap='viridis', alpha=0.6, s=20)
+    axs1[2].set_xlabel('Distance (r)')
+    axs1[2].set_ylabel('Path Loss (PL)')
+    axs1[2].set_title('PL vs Distance (colored by RMS)')
+    fig1.colorbar(scatter, ax=axs1[2], label='RMS')
+
     plt.tight_layout()
     plt.show()
+
+    # ---- Figure 2: Model Performance ----
+    fig2, axs2 = plt.subplots(1, 3, figsize=(18, 5))
+
+    # Model Performance Comparison
+    model_names = [r['name'] for r in sklearn_results[:5]]
+    rmse_values = [r['metrics']['rmse'] for r in sklearn_results[:5]]
+    model_names.append('LSTM')
+    rmse_values.append(lstm_results['rmse'])
+    bars = axs2[0].barh(model_names, rmse_values)
+    axs2[0].set_xlabel('RMSE')
+    axs2[0].set_title('Top Models by RMSE')
+    bars[np.argmin(rmse_values)].set_color('red')
+
+    # Residual Plot
+    best_model = sklearn_results[0]
+    residuals = np.array(best_model['y_test']) - np.array(best_model['y_pred'])
+    axs2[1].scatter(best_model['y_pred'], residuals, alpha=0.5)
+    axs2[1].axhline(y=0, color='r', linestyle='--')
+    axs2[1].set_xlabel('Predicted Values')
+    axs2[1].set_ylabel('Residuals')
+    axs2[1].set_title(f'Residual Plot - {best_model["name"]}')
+
+    # Error Distribution
+    errors = []
+    labels = []
+    for r in sklearn_results[:5]:
+        if r['success'] and 'y_test' in r and 'y_pred' in r:
+            error = np.abs(np.array(r['y_test']) - np.array(r['y_pred']))
+            errors.append(error)
+            labels.append(r['name'])
+    axs2[2].boxplot(errors, labels=labels)
+    axs2[2].set_ylabel('Absolute Error')
+    axs2[2].set_title('Error Distribution - Top 5 Models')
+    plt.setp(axs2[2].xaxis.get_majorticklabels(), rotation=45)
+
+    plt.tight_layout()
+    plt.show()
+
+    # ---- Figure 3: LSTM & Feature Insights ----
+    fig3, axs3 = plt.subplots(1, 3, figsize=(18, 5))
+
+    # LSTM Training History
+    axs3[0].plot(lstm_results['train_loss'], label='Train Loss')
+    axs3[0].plot(lstm_results['val_loss'], label='Val Loss')
+    axs3[0].set_xlabel('Epoch')
+    axs3[0].set_ylabel('Loss')
+    axs3[0].set_title('LSTM Training History')
+    axs3[0].legend()
+
+    # Feature Importance
+    tree_model = sklearn_results[-1]
+    importances = tree_model['model'].feature_importances_
+    features = ['PL', 'RMS']
+    axs3[1].bar(features, importances)
+    axs3[1].set_title(f'Feature Importances - {tree_model["name"]}')
+    axs3[1].set_ylabel('Importance')
+
+    # 2D Path Loss Heatmap
+    heatmap_data = df_raw.pivot_table(
+        values='PL',
+        index=pd.cut(df_raw['Y'], bins=20),
+        columns=pd.cut(df_raw['X'], bins=20),
+        aggfunc='mean'
+    )
+    sns.heatmap(heatmap_data, cmap='RdYlBu_r', ax=axs3[2], cbar_kws={'label': 'Avg PL'})
+    axs3[2].set_title('Path Loss Heatmap')
+    axs3[2].set_xlabel('X bins')
+    axs3[2].set_ylabel('Y bins')
+
+    plt.tight_layout()
+    plt.show()
+
 
 def perform_statistical_analysis(sklearn_results, lstm_results):
     """Perform statistical analysis of results"""
@@ -261,7 +255,7 @@ def perform_statistical_analysis(sklearn_results, lstm_results):
     model_types = {
         'Linear': ['linear'],
         'SVM': ['svr'],
-        # 'Tree': ['forest', 'tree'],
+        'Tree': ['forest', 'tree'],
         #'Neural': ['mlp'],
         #'Neighbors': ['knn']
     }
@@ -298,10 +292,6 @@ def save_analysis_results(sklearn_results, lstm_results, comparison_df):
     if comparison_df is not None:
         comparison_df.to_csv('results/model_comparison.csv', index=False)
         print(f"\nResults saved to results/model_comparison.csv")
-    
-    # Create results directory if it doesn't exist
-    import os
-    os.makedirs('results', exist_ok=True)
     
     # Save detailed report
     with open('results/analysis_report.txt', 'w') as f:
