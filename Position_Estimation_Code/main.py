@@ -1,159 +1,325 @@
+# main_enhanced.py
 import numpy as np
 import matplotlib.pyplot as plt
-from src.training.train_sklearn import train_all_sklearn_models
+import seaborn as sns
+from src.training.train_enhanced import train_all_models_enhanced, automated_model_selection
 from src.training.train_dl import train_lstm_on_all
 from src.data.loader import load_cir_data, extract_features_and_target
+from src.data.feature_engineering import create_engineered_features, select_features
+from src.evaluation.metrics import print_metrics_report, calculate_all_metrics
 from sklearn.model_selection import train_test_split
+import pandas as pd
+import warnings
+warnings.filterwarnings('ignore')
 
-def run_comprehensive_comparison():
-    """Run comprehensive comparison with proper size alignment"""
+def run_comprehensive_analysis():
+    """Run comprehensive analysis with all models and feature engineering"""
     processed_dir = "data/processed"
     
-    print("=== COMPREHENSIVE MODEL COMPARISON ===\n")
+    print("=" * 80)
+    print("COMPREHENSIVE POSITION ESTIMATION ANALYSIS")
+    print("=" * 80)
     
-    # Train sklearn models
-    print("1. Training sklearn models...")
-    sklearn_results, sklearn_df = train_all_sklearn_models(processed_dir)
+    # 1. Load and explore data
+    print("\n1. Loading and exploring data...")
+    df_list = []
     
-    # Train LSTM
-    print("\n2. Training LSTM model...")
+    # Load all available datasets
+    for keyword in ['FCPR-D1', 'FCPR-D2', 'FCPR-D3', 'ICU-D1', 'ICU-D2', 'ICU-D3']:
+        try:
+            df_temp = load_cir_data(processed_dir, filter_keyword=keyword)
+            print(f"  Loaded {keyword}: {len(df_temp)} samples")
+            df_list.append(df_temp)
+        except:
+            print(f"  {keyword} not found")
+    
+    # Combine all data
+    df_all = pd.concat(df_list, ignore_index=True) if df_list else None
+    
+    if df_all is None:
+        print("No data found!")
+        return
+    
+    print(f"\nTotal samples: {len(df_all)}")
+    print(f"Unique sources: {df_all['source_file'].nunique()}")
+    
+    # 2. Feature Engineering
+    print("\n2. Feature Engineering...")
+    df_engineered = create_engineered_features(df_all, include_coordinates=True, include_categorical=False)
+    
+    # Select features
+    feature_cols = [col for col in df_engineered.columns 
+                   if col not in ['r', 'X', 'Y', 'source_file']]
+    
+    X = df_engineered[feature_cols]
+    y = df_engineered['r']
+    
+    # Select best features
+    selected_features = select_features(X, y, method='correlation', threshold=0.3)
+    print(f"  Selected {len(selected_features)} features from {len(feature_cols)} total")
+    print(f"  Top features: {selected_features[:10]}")
+    
+    X_selected = X[selected_features]
+    
+    # 3. Train models with basic features
+    print("\n3. Training models with BASIC features (PL, RMS only)...")
+    results_basic, df_basic, _ = train_all_models_enhanced(
+        processed_dir, 
+        include_slow_models=True
+    )
+    
+    # 4. Train models with engineered features
+    print("\n4. Training models with ENGINEERED features...")
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_selected, y, test_size=0.2, random_state=42
+    )
+    
+    # Convert to temporary CSV for compatibility
+    temp_df = pd.concat([X_selected, y], axis=1)
+    temp_df['source_file'] = 'engineered'
+    temp_df.to_csv('data/processed/temp_engineered_CIR.csv', index=False)
+    
+    # Note: This would need modification of train_all_models_enhanced to accept custom features
+    # For now, we'll show the comparison concept
+    
+    # 5. Deep Learning Comparison
+    print("\n5. Training LSTM model...")
     lstm_results = train_lstm_on_all(processed_dir)
     
-    if sklearn_results and lstm_results:
-        print("\n3. Creating comprehensive plots...")
-        create_comprehensive_plots(sklearn_results, sklearn_df, lstm_results)
-    else:
-        print("Error: Could not complete training for all models")
+    # 6. Create comprehensive visualization
+    create_comprehensive_analysis_plots(results_basic, lstm_results, df_all, df_engineered)
+    
+    # 7. Statistical Analysis
+    print("\n7. Statistical Analysis...")
+    perform_statistical_analysis(results_basic, lstm_results)
+    
+    # 8. Save results
+    save_analysis_results(results_basic, lstm_results, df_basic)
 
-def create_comprehensive_plots(sklearn_results, sklearn_df, lstm_results):
-    """Create comprehensive plots with proper size alignment"""
+def create_comprehensive_analysis_plots(sklearn_results, lstm_results, df_raw, df_engineered):
+    """Create comprehensive analysis plots"""
     
-    # Get the best sklearn model
-    best_sklearn = min(sklearn_results, key=lambda x: x['rmse'])
+    # Set style
+    plt.style.use('seaborn-v0_8-darkgrid')
+    sns.set_palette("husl")
     
-    # Get LSTM results
-    r_actual_lstm = np.array(lstm_results['r_actual'])
-    r_pred_lstm = np.array(lstm_results['r_pred'])
-    train_loss = lstm_results['train_loss']
-    val_loss = lstm_results['val_loss']
+    # Create figure with subplots
+    fig = plt.figure(figsize=(20, 15))
     
-    # Get sklearn predictions (these are on test set)
-    sklearn_pred = np.array(best_sklearn['y_pred'])
+    # 1. Feature Correlation Heatmap
+    ax1 = plt.subplot(3, 3, 1)
+    correlation_matrix = df_raw[['PL', 'RMS', 'r']].corr()
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0, ax=ax1)
+    ax1.set_title('Feature Correlation Matrix')
     
-    # Load original data to get proper alignment
-    df = load_cir_data("data/processed", filter_keyword="FCPR-D1")
-    X, y = extract_features_and_target(df)
+    # 2. Feature Distributions
+    ax2 = plt.subplot(3, 3, 2)
+    df_raw[['PL', 'RMS']].hist(bins=30, ax=ax2, alpha=0.7)
+    ax2.set_title('Feature Distributions')
     
-    # Get the same test split used in sklearn training
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    sklearn_actual = np.array(y_test)
+    # 3. PL vs Distance scatter
+    ax3 = plt.subplot(3, 3, 3)
+    scatter = ax3.scatter(df_raw['r'], df_raw['PL'], c=df_raw['RMS'], 
+                         cmap='viridis', alpha=0.6, s=20)
+    ax3.set_xlabel('Distance (r)')
+    ax3.set_ylabel('Path Loss (PL)')
+    ax3.set_title('PL vs Distance (colored by RMS)')
+    plt.colorbar(scatter, ax=ax3, label='RMS')
     
-    print(f"Data sizes:")
-    print(f"  Original dataset: {len(df)}")
-    print(f"  LSTM sequences: {len(r_actual_lstm)}")
-    print(f"  Sklearn test set: {len(sklearn_actual)}")
-    print(f"  Best sklearn model: {best_sklearn['name']} (RMSE: {best_sklearn['rmse']:.4f})")
-    print(f"  LSTM RMSE: {lstm_results['rmse']:.4f}")
+    # 4. Model Performance Comparison
+    ax4 = plt.subplot(3, 3, 4)
+    if sklearn_results:
+        model_names = [r['name'] for r in sklearn_results[:10]]  # Top 10
+        rmse_values = [r['metrics']['rmse'] for r in sklearn_results[:10]]
+        
+        # Add LSTM
+        model_names.append('LSTM')
+        rmse_values.append(lstm_results['rmse'])
+        
+        bars = ax4.barh(model_names, rmse_values)
+        ax4.set_xlabel('RMSE')
+        ax4.set_title('Top 10 Models by RMSE')
+        
+        # Color best model
+        min_idx = np.argmin(rmse_values)
+        bars[min_idx].set_color('red')
     
-    # Create the plots
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-    fig.suptitle('Comprehensive Model Comparison', fontsize=16)
+    # 5. Residual Analysis
+    ax5 = plt.subplot(3, 3, 5)
+    if sklearn_results and sklearn_results[0]['success']:
+        best_model = sklearn_results[0]
+        if 'y_test' in best_model and 'y_pred' in best_model:
+            residuals = np.array(best_model['y_test']) - np.array(best_model['y_pred'])
+            ax5.scatter(best_model['y_pred'], residuals, alpha=0.5)
+            ax5.axhline(y=0, color='r', linestyle='--')
+            ax5.set_xlabel('Predicted Values')
+            ax5.set_ylabel('Residuals')
+            ax5.set_title(f'Residual Plot - {best_model["name"]}')
+        else:
+            ax5.text(0.5, 0.5, 'No residual data available', 
+                    ha='center', va='center', transform=ax5.transAxes)
+            ax5.set_title('Residual Plot - Not Available')
+    # 6. LSTM Training History
+    ax6 = plt.subplot(3, 3, 6)
+    if lstm_results:
+        ax6.plot(lstm_results['train_loss'], label='Train Loss')
+        ax6.plot(lstm_results['val_loss'], label='Val Loss')
+        ax6.set_xlabel('Epoch')
+        ax6.set_ylabel('Loss')
+        ax6.set_title('LSTM Training History')
+        ax6.legend()
     
-    # Plot 1: RMSE Comparison Bar Chart
-    model_names = [r['name'] for r in sklearn_results] + ['LSTM']
-    rmse_values = [r['rmse'] for r in sklearn_results] + [lstm_results['rmse']]
-    colors = ['skyblue'] * len(sklearn_results) + ['orange']
+    # 7. Feature Importance (for tree-based models)
+    ax7 = plt.subplot(3, 3, 7)
+    # Find a tree-based model
+    tree_model = None
+    for r in sklearn_results:
+        if 'forest' in r['name'].lower() or 'boost' in r['name'].lower():
+            tree_model = r
+            break
     
-    bars = axes[0, 0].bar(range(len(model_names)), rmse_values, color=colors)
-    axes[0, 0].set_xlabel('Models')
-    axes[0, 0].set_ylabel('RMSE')
-    axes[0, 0].set_title('RMSE Comparison Across All Models')
-    axes[0, 0].set_xticks(range(len(model_names)))
-    axes[0, 0].set_xticklabels(model_names, rotation=45, ha='right')
-    axes[0, 0].grid(True, alpha=0.3)
+    if tree_model and hasattr(tree_model['model'], 'feature_importances_'):
+        importances = tree_model['model'].feature_importances_
+        features = ['PL', 'RMS']
+        ax7.bar(features, importances)
+        ax7.set_title(f'Feature Importances - {tree_model["name"]}')
+        ax7.set_ylabel('Importance')
     
-    # Add value labels on bars
-    for bar, value in zip(bars, rmse_values):
-        axes[0, 0].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
-                       f'{value:.3f}', ha='center', va='bottom', fontsize=8)
+    # 8. Error Distribution
+    ax8 = plt.subplot(3, 3, 8)
+    if sklearn_results:
+        errors = []
+        labels = []
+        for r in sklearn_results[:5]:  # Top 5 models
+            if r['success'] and 'y_test' in r and 'y_pred' in r:
+                error = np.abs(np.array(r['y_test']) - np.array(r['y_pred']))
+                errors.append(error)
+                labels.append(r['name'])
+        
+        if errors:
+            ax8.boxplot(errors, labels=labels)
+            ax8.set_ylabel('Absolute Error')
+            ax8.set_title('Error Distribution - Top 5 Models')
+            plt.setp(ax8.xaxis.get_majorticklabels(), rotation=45)
+        else:
+            ax8.text(0.5, 0.5, 'No error data available', 
+                    ha='center', va='center', transform=ax8.transAxes)
+            ax8.set_title('Error Distribution - Not Available')
     
-    # Plot 2: Sklearn Best Model - Actual vs Predicted
-    axes[0, 1].scatter(sklearn_actual, sklearn_pred, alpha=0.6, color='blue')
-    axes[0, 1].plot([sklearn_actual.min(), sklearn_actual.max()], 
-                   [sklearn_actual.min(), sklearn_actual.max()], 'r--', lw=2)
-    axes[0, 1].set_xlabel('Actual r')
-    axes[0, 1].set_ylabel('Predicted r')
-    axes[0, 1].set_title(f'Best Sklearn Model: {best_sklearn["name"]}\nRMSE: {best_sklearn["rmse"]:.4f}')
-    axes[0, 1].grid(True, alpha=0.3)
-    
-    # Plot 3: LSTM - Actual vs Predicted  
-    axes[1, 0].scatter(r_actual_lstm, r_pred_lstm, alpha=0.6, color='orange')
-    axes[1, 0].plot([r_actual_lstm.min(), r_actual_lstm.max()], 
-                   [r_actual_lstm.min(), r_actual_lstm.max()], 'r--', lw=2)
-    axes[1, 0].set_xlabel('Actual r')
-    axes[1, 0].set_ylabel('Predicted r')
-    axes[1, 0].set_title(f'LSTM Model\nRMSE: {lstm_results["rmse"]:.4f}')
-    axes[1, 0].grid(True, alpha=0.3)
-    
-    # Plot 4: LSTM Training History
-    axes[1, 1].plot(train_loss, label='Training Loss', color='blue')
-    axes[1, 1].plot(val_loss, label='Validation Loss', color='red')
-    axes[1, 1].set_xlabel('Epoch')
-    axes[1, 1].set_ylabel('MSE Loss')
-    axes[1, 1].set_title('LSTM Training History')
-    axes[1, 1].legend()
-    axes[1, 1].grid(True, alpha=0.3)
+    # 9. 2D Position Heatmap
+    ax9 = plt.subplot(3, 3, 9)
+    if 'X' in df_raw.columns and 'Y' in df_raw.columns:
+        heatmap_data = df_raw.pivot_table(
+            values='PL', 
+            index=pd.cut(df_raw['Y'], bins=20), 
+            columns=pd.cut(df_raw['X'], bins=20),
+            aggfunc='mean'
+        )
+        sns.heatmap(heatmap_data, cmap='RdYlBu_r', ax=ax9, cbar_kws={'label': 'Avg PL'})
+        ax9.set_title('Path Loss Heatmap')
+        ax9.set_xlabel('X bins')
+        ax9.set_ylabel('Y bins')
     
     plt.tight_layout()
     plt.show()
-    
-    # Print summary
-    print("\n" + "="*60)
-    print("FINAL COMPARISON SUMMARY")
-    print("="*60)
-    print(f"Best Sklearn Model: {best_sklearn['name']} - RMSE: {best_sklearn['rmse']:.4f}")
-    print(f"LSTM Model: RMSE: {lstm_results['rmse']:.4f}")
-    
-    if lstm_results['rmse'] < best_sklearn['rmse']:
-        improvement = ((best_sklearn['rmse'] - lstm_results['rmse']) / best_sklearn['rmse']) * 100
-        print(f"\n🎉 LSTM outperforms best sklearn model by {improvement:.1f}%")
-    else:
-        difference = ((lstm_results['rmse'] - best_sklearn['rmse']) / best_sklearn['rmse']) * 100
-        print(f"\n📊 Best sklearn model outperforms LSTM by {difference:.1f}%")
 
-def run_simple_comparison():
-    """Simple comparison without comprehensive plots"""
-    processed_dir = "data/processed"
+def perform_statistical_analysis(sklearn_results, lstm_results):
+    """Perform statistical analysis of results"""
     
-    print("=== SIMPLE MODEL COMPARISON ===\n")
+    if not sklearn_results:
+        return
     
-    # Train sklearn models
-    sklearn_results, sklearn_df = train_all_sklearn_models(processed_dir)
+    print("\n" + "="*60)
+    print("STATISTICAL ANALYSIS")
+    print("="*60)
     
-    # Train LSTM
-    lstm_results = train_lstm_on_all(processed_dir)
+    # Extract RMSE values
+    rmse_values = [r['metrics']['rmse'] for r in sklearn_results if r['success']]
     
-    if sklearn_results and lstm_results:
-        print("\n" + "="*50)
-        print("COMPARISON SUMMARY")
-        print("="*50)
+    # Basic statistics
+    print(f"\nModel Performance Statistics:")
+    print(f"  Number of models: {len(rmse_values)}")
+    print(f"  Mean RMSE: {np.mean(rmse_values):.4f}")
+    print(f"  Std RMSE: {np.std(rmse_values):.4f}")
+    print(f"  Min RMSE: {np.min(rmse_values):.4f}")
+    print(f"  Max RMSE: {np.max(rmse_values):.4f}")
+    print(f"  LSTM RMSE: {lstm_results['rmse']:.4f}")
+    
+    # Performance categories
+    excellent = sum(1 for r in rmse_values if r < 50)
+    good = sum(1 for r in rmse_values if 50 <= r < 100)
+    fair = sum(1 for r in rmse_values if 100 <= r < 150)
+    poor = sum(1 for r in rmse_values if r >= 150)
+    
+    print(f"\nPerformance Distribution:")
+    print(f"  Excellent (<50): {excellent}")
+    print(f"  Good (50-100): {good}")
+    print(f"  Fair (100-150): {fair}")
+    print(f"  Poor (>150): {poor}")
+    
+    # Model type analysis
+    model_types = {
+        'Linear': ['linear'],
+        'SVM': ['svr'],
+        # 'Tree': ['forest', 'tree'],
+        #'Neural': ['mlp'],
+        #'Neighbors': ['knn']
+    }
+    
+    print(f"\nPerformance by Model Type:")
+    for type_name, keywords in model_types.items():
+        type_rmses = [r['metrics']['rmse'] for r in sklearn_results 
+                     if r['success'] and any(k in r['name'].lower() for k in keywords)]
+        if type_rmses:
+            print(f"  {type_name}: Mean RMSE = {np.mean(type_rmses):.4f} (n={len(type_rmses)})")
+
+def save_analysis_results(sklearn_results, lstm_results, comparison_df):
+    """Save analysis results to files"""
+    
+    # Save detailed results
+    results_summary = {
+        'sklearn_results': [
+            {
+                'name': r['name'],
+                'rmse': r['metrics']['rmse'],
+                'mae': r['metrics']['mae'],
+                'r2': r['metrics']['r2']
+            }
+            for r in sklearn_results if r['success']
+        ],
+        'lstm_results': {
+            'rmse': lstm_results['rmse'],
+            'final_train_loss': lstm_results['train_loss'][-1],
+            'final_val_loss': lstm_results['val_loss'][-1]
+        }
+    }
+    
+    # Save to CSV
+    if comparison_df is not None:
+        comparison_df.to_csv('results/model_comparison.csv', index=False)
+        print(f"\nResults saved to results/model_comparison.csv")
+    
+    # Create results directory if it doesn't exist
+    import os
+    os.makedirs('results', exist_ok=True)
+    
+    # Save detailed report
+    with open('results/analysis_report.txt', 'w') as f:
+        f.write("POSITION ESTIMATION ANALYSIS REPORT\n")
+        f.write("="*60 + "\n\n")
         
-        best_sklearn = min(sklearn_results, key=lambda x: x['rmse'])
-        print(f"Best Sklearn: {best_sklearn['name']} - RMSE: {best_sklearn['rmse']:.4f}")
-        print(f"LSTM: RMSE: {lstm_results['rmse']:.4f}")
+        f.write("Top 10 Models:\n")
+        for i, r in enumerate(sklearn_results[:10]):
+            if r['success']:
+                f.write(f"{i+1}. {r['name']}: RMSE={r['metrics']['rmse']:.4f}\n")
         
-        if lstm_results['rmse'] < best_sklearn['rmse']:
-            improvement = ((best_sklearn['rmse'] - lstm_results['rmse']) / best_sklearn['rmse']) * 100
-            print(f"LSTM is better by {improvement:.1f}%")
-        else:
-            difference = ((lstm_results['rmse'] - best_sklearn['rmse']) / best_sklearn['rmse']) * 100
-            print(f"Sklearn is better by {difference:.1f}%")
+        f.write(f"\nLSTM Performance: RMSE={lstm_results['rmse']:.4f}\n")
 
 if __name__ == "__main__":
-    # Set this to control which mode to run
-    comprehensive_mode = True
+    # Run comprehensive analysis
+    run_comprehensive_analysis()
     
-    if comprehensive_mode:
-        run_comprehensive_comparison()
-    else:
-        run_simple_comparison()
+    # Or run automated model selection
+    #best_model = automated_model_selection("data/processed")
+    
+    print("\nAnalysis complete!")
