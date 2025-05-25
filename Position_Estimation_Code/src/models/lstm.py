@@ -1,27 +1,30 @@
 import torch
 import torch.nn as nn
+from ..config import MODEL_CONFIG
 
 class LSTMRegressor(nn.Module):
-    def __init__(self, input_dim=2, hidden_dim=64, num_layers=2, dropout=0.2):
+    def __init__(self, input_dim=2, hidden_dim=None, num_layers=None, dropout=None):
         super(LSTMRegressor, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
+        # Use provided parameters or fall back to config values
+        self.hidden_dim = hidden_dim if hidden_dim is not None else MODEL_CONFIG['hidden_dim']
+        self.num_layers = num_layers if num_layers is not None else MODEL_CONFIG['num_layers']
+        self.dropout = dropout if dropout is not None else MODEL_CONFIG['dropout']
         
         # Add dropout for regularization
         self.lstm = nn.LSTM(
             input_dim, 
-            hidden_dim, 
-            num_layers, 
+            self.hidden_dim, 
+            self.num_layers, 
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0
+            dropout=self.dropout if self.num_layers > 1 else 0
         )
         
         # Add a more complex output layer
         self.fc = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.Linear(self.hidden_dim, self.hidden_dim // 2),
             nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim // 2, 1)
+            nn.Dropout(self.dropout),
+            nn.Linear(self.hidden_dim // 2, 1)
         )
 
     def forward(self, x):

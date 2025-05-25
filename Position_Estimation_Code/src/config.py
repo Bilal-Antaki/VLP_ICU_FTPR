@@ -63,7 +63,7 @@ ANALYSIS_CONFIG = {
 
 # Model Training Options
 TRAINING_OPTIONS = {
-    'include_slow_models': True,  # Whether to include computationally intensive models
+    'include_slow_models': False,  # Whether to include computationally intensive models
     'save_predictions': True,      # Whether to save model predictions
-    'plot_training_history': True  # Whether to plot training history for applicable models
+    'plot_training_history': False  # Whether to plot training history for applicable models
 }

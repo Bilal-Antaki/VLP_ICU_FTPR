@@ -98,7 +98,7 @@ def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2,
     results = []
     successful_results = []
     
-    print(f"\nTraining {len(model_configs)} model configurations...")
+    print(f"\nTraining model configurations...")
     print("-" * 60)
     
     for display_name, model_name, kwargs, needs_scaling in model_configs:

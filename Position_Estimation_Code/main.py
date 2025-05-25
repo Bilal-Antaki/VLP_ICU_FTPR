@@ -13,6 +13,41 @@ import os
 
 warnings.filterwarnings('ignore')
 
+def create_predictions_dataframe(model_results):
+    """Create a consolidated DataFrame of actual values and predictions from all models"""
+    predictions_dict = {}
+    
+    # First, find the LSTM result to get the base length and actual values
+    lstm_result = None
+    for result in model_results:
+        if result['name'].lower() == 'lstm' and result.get('predictions'):
+            lstm_result = result
+            break
+    
+    if lstm_result is None:
+        return pd.DataFrame()
+    
+    # Use LSTM's actual values and predictions
+    if 'y_test' in lstm_result['predictions']:
+        predictions_dict['r_actual'] = lstm_result['predictions']['y_test']
+        predictions_dict['r_lstm'] = lstm_result['predictions']['y_pred']
+    else:
+        return pd.DataFrame()
+    
+    # Only include other models if their predictions match LSTM length
+    base_length = len(predictions_dict['r_actual'])
+    
+    for result in model_results:
+        if result['name'].lower() == 'lstm':
+            continue
+            
+        if result.get('predictions') and len(result['predictions']['y_test']) == base_length:
+            model_name = result['name'].lower()
+            predictions_dict[f'r_{model_name}'] = result['predictions']['y_pred']
+    
+    return pd.DataFrame(predictions_dict)
+
+
 def run_analysis():
     """Run analysis with Linear, SVR, and LSTM models"""
     print("=" * 80)
@@ -39,8 +74,6 @@ def run_analysis():
         print("No data found!")
         return
     
-    print(f"\nTotal samples: {len(df_all)}")
-    print(f"Unique sources: {df_all['source_file'].nunique()}")
     
     # 2. Feature Engineering
     print("\n2. Feature Engineering...")
@@ -66,6 +99,26 @@ def run_analysis():
     print("\n3. Training all models...")
     all_model_results = []
     
+    # Train and add LSTM results first
+    lstm_results = train_lstm_on_all(DATA_CONFIG['processed_dir'])
+    all_model_results.append({
+        'name': 'lstm',  # Changed to lowercase to match other models
+        'type': 'RNN',
+        'metrics': {
+            'rmse': lstm_results['rmse'],
+            'mae': lstm_results.get('mae', None),
+            'r2': lstm_results.get('r2', None)
+        },
+        'predictions': {
+            'y_test': lstm_results['r_actual'],  # Map r_actual to y_test
+            'y_pred': lstm_results['r_pred']     # Map r_pred to y_pred
+        } if TRAINING_OPTIONS['save_predictions'] else None,
+        'training_history': {
+            'train_loss': lstm_results['train_loss'],
+            'val_loss': lstm_results['val_loss']
+        } if TRAINING_OPTIONS['plot_training_history'] else None
+    })
+    
     # Train traditional ML models
     sklearn_results = train_all_models_enhanced(
         DATA_CONFIG['processed_dir'], 
@@ -86,33 +139,15 @@ def run_analysis():
                 'training_history': None
             })
     
-    # Train and add LSTM results
-    lstm_results = train_lstm_on_all(DATA_CONFIG['processed_dir'])
-    all_model_results.append({
-        'name': 'LSTM',
-        'type': 'RNN',
-        'metrics': {
-            'rmse': lstm_results['rmse'],
-            'mae': lstm_results.get('mae', None),
-            'r2': lstm_results.get('r2', None)
-        },
-        'predictions': {
-            'y_test': lstm_results.get('y_test', []),
-            'y_pred': lstm_results.get('y_pred', [])
-        } if TRAINING_OPTIONS['save_predictions'] else None,
-        'training_history': {
-            'train_loss': lstm_results['train_loss'],
-            'val_loss': lstm_results['val_loss']
-        } if TRAINING_OPTIONS['plot_training_history'] else None
-    })
-    
-    # 4. Create visualization figures
+    # 4. Create visualization figures - only show model performance comparison
     if TRAINING_OPTIONS['plot_training_history']:
         create_analysis_figures(all_model_results, df_all)
     
-    # 5. Statistical Analysis
-    print("\n4. Statistical Analysis...")
+    # 5. Statistical Analysis and Results
+    print("\n4. Statistical Analysis and Results")
+    print("=" * 80)
     perform_statistical_analysis(all_model_results)
+    
     
     # 6. Save results
     if TRAINING_OPTIONS['save_predictions']:
@@ -122,41 +157,13 @@ def run_analysis():
     print("\nAnalysis complete.")
 
 def create_analysis_figures(model_results, df_raw):
-    """Create separate figure windows for different visualizations"""
-    
-    # Figure 1: Data Exploration
-    fig1, ax = plt.subplots(1, 2, figsize=ANALYSIS_CONFIG['visualization']['figure_sizes']['data_exploration'])
-    fig1.suptitle('Data Exploration', fontsize=16)
-    
-    # Correlation Heatmap
-    correlation_matrix = df_raw[['PL', 'RMS', 'r']].corr()
-    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0, ax=ax[0])
-    ax[0].set_title('Feature Correlation Matrix')
-    
-    # PL vs Distance
-    scatter = ax[1].scatter(
-        df_raw['r'], 
-        df_raw['PL'], 
-        c=df_raw['RMS'], 
-        cmap='viridis', 
-        alpha=ANALYSIS_CONFIG['visualization']['scatter_alpha'], 
-        s=ANALYSIS_CONFIG['visualization']['scatter_size']
-    )
-    ax[1].set_xlabel('Distance (r)')
-    ax[1].set_ylabel('Path Loss (PL)')
-    ax[1].set_title('PL vs Distance (colored by RMS)')
-    fig1.colorbar(scatter, ax=ax[1], label='RMS')
-    
-    plt.tight_layout()
-    plt.show()
-    
-    # Figure 2: Model Performance Comparison
-    fig2, axes = plt.subplots(
+    # Figure 1: Model Performance Comparison
+    fig1, axes = plt.subplots(
         2, 1, 
         figsize=ANALYSIS_CONFIG['visualization']['figure_sizes']['model_comparison'], 
         height_ratios=ANALYSIS_CONFIG['visualization']['height_ratios']
     )
-    fig2.suptitle('Model Performance Comparison', fontsize=16)
+    fig1.suptitle('Model Performance Comparison', fontsize=16)
     
     # Sort models by RMSE for better visualization
     model_results.sort(key=lambda x: x['metrics']['rmse'])
@@ -205,48 +212,41 @@ def create_analysis_figures(model_results, df_raw):
     plt.show()
 
 def perform_statistical_analysis(model_results):
-    """Perform statistical analysis of results"""
-    print("\nSTATISTICAL ANALYSIS")
-    print("="*60)
     
-    # Overall statistics
-    rmse_values = [r['metrics']['rmse'] for r in model_results]
-    mae_values = [r['metrics'].get('mae', 0) for r in model_results]
-    r2_values = [r['metrics'].get('r2', 0) for r in model_results]
-    
-    print("\nOverall Model Performance:")
-    print(f"  Mean RMSE: {np.mean(rmse_values):.4f}")
-    print(f"  Best RMSE: {np.min(rmse_values):.4f}")
-    print(f"  Std RMSE: {np.std(rmse_values):.4f}")
-    
-    # Only print MAE and R2 statistics if available for all models
-    if all(mae_values):
-        print(f"  Mean MAE: {np.mean(mae_values):.4f}")
-    if all(r2_values):
-        print(f"  Mean R2: {np.mean(r2_values):.4f}")
-    
-    # List all models trained
-    model_names = [r['name'] for r in model_results]
-    print(f"\nModels trained: {', '.join(model_names)}")
+    # Sort results by RMSE for better readability
+    sorted_results = sorted(model_results, key=lambda x: x['metrics']['rmse'])
+    best_rmse = min(r['metrics']['rmse'] for r in model_results)
     
     # Individual model results
     print("\nDetailed Model Results:")
     print("-" * 40)
     
-    # Sort results by RMSE for better readability
-    sorted_results = sorted(model_results, key=lambda x: x['metrics']['rmse'])
-    best_rmse = min(rmse_values)
-    
     for result in sorted_results:
         print(f"\n{result['name']}:")
-        print(f"  RMSE: {result['metrics']['rmse']:.4f}")
-        if result['metrics'].get('mae'):
-            print(f"  MAE: {result['metrics']['mae']:.4f}")
-        if result['metrics'].get('r2'):
-            print(f"  R2: {result['metrics']['r2']:.4f}")
+        rmse = result['metrics']['rmse']
+        
+        # Calculate mean and std dev from predictions
+        predictions = None
+        if result.get('predictions'):
+            if 'y_pred' in result['predictions']:
+                predictions = result['predictions']['y_pred']
+            elif 'r_pred' in result['predictions']:  # For LSTM results
+                predictions = result['predictions']['r_pred']
+        
+        mean = std_dev = None
+        if predictions is not None and len(predictions) > 0:
+            predictions = np.array(predictions)
+            mean = np.mean(predictions)
+            std_dev = np.std(predictions)
+        
+        print(f"  RMSE: {rmse:.4f}")
+        if mean is not None:
+            print(f"  Mean: {mean:.4f}")
+        if std_dev is not None:
+            print(f"  Std: {std_dev:.4f}")
         
         # Show if this was the best model
-        if result['metrics']['rmse'] == best_rmse:
+        if rmse == best_rmse:
             print("  → Best performing model")
 
 def save_analysis_results(model_results):
@@ -277,7 +277,6 @@ def save_analysis_results(model_results):
                 f.write(f"  MAE: {result['metrics']['mae']:.4f}\n")
             if result['metrics'].get('r2'):
                 f.write(f"  R2: {result['metrics']['r2']:.4f}\n")
-
 
 if __name__ == "__main__":
     run_analysis()

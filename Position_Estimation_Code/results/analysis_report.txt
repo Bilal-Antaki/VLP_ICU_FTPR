@@ -4,8 +4,8 @@ POSITION ESTIMATION ANALYSIS REPORT
 Model Performance Summary:
 ----------------------------------------
 
-Model: LSTM (RNN)
-  RMSE: 178.8905
+Model: lstm (RNN)
+  RMSE: 193.2188
 
 Model: linear (sklearn)
   RMSE: 414.5674
@@ -13,6 +13,6 @@ Model: linear (sklearn)
   R2: 0.3059
 
 Model: svr (sklearn)
-  RMSE: 425.3168
-  MAE: 308.2598
-  R2: 0.2695
+  RMSE: 424.2443
+  MAE: 309.9371
+  R2: 0.2732

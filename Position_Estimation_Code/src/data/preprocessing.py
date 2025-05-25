@@ -1,7 +1,6 @@
 import numpy as np
 import torch
-from sklearn.preprocessing import StandardScaler, RobustScaler
-import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
 def sequence_split(X, y, seq_len):
     """Create sequences for LSTM training"""
@@ -29,10 +28,10 @@ def scale_and_sequence(df, seq_len=10, features=['PL', 'RMS'], target='r'):
     y_scaled = y_scaler.fit_transform(y.reshape(-1, 1)).flatten()
     
     # Check for data issues
+    print(f"Original y (r) range: [{y.min():.3f}, {y.max():.3f}]")
     print(f"Data shape: X={X_scaled.shape}, y={y_scaled.shape}")
-    print(f"X range: [{X_scaled.min():.3f}, {X_scaled.max():.3f}]")
-    print(f"y range: [{y_scaled.min():.3f}, {y_scaled.max():.3f}]")
-    print(f"Original y range: [{y.min():.3f}, {y.max():.3f}]")
+    print(f"Scaled X range: [{X_scaled.min():.3f}, {X_scaled.max():.3f}]")
+    print(f"Scaled y range: [{y_scaled.min():.3f}, {y_scaled.max():.3f}]")
     
     # Create sequences
     X_seq, y_seq = sequence_split(X_scaled, y_scaled, seq_len)
