@@ -5,7 +5,10 @@ Model Performance Summary:
 ----------------------------------------
 
 Model: lstm (RNN)
-  RMSE: 193.2188
+  RMSE: 163.9895
+
+Model: gru (RNN)
+  RMSE: 242.7294
 
 Model: linear (sklearn)
   RMSE: 414.5674

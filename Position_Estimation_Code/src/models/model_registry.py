@@ -2,7 +2,9 @@
 from .linear import build_linear_model_simple
 from .svr import build_svr_model, build_svr_optimized
 from .lstm import build_lstm_model
+from .gru import build_gru_model, build_gru_with_attention, build_gru_bidirectional, build_gru_residual
 #from .lstm_2 import build_lstm_model_2
+
 
 MODEL_REGISTRY = {
     # Linear models
@@ -14,8 +16,20 @@ MODEL_REGISTRY = {
     
     # RNN models
     "lstm": build_lstm_model,
+    "gru": build_gru_model,
+    "gru_attention": build_gru_with_attention,
+    "gru_bidirectional": build_gru_bidirectional,
+    "gru_residual": build_gru_residual,
     #"lstm_2": build_lstm_model_2,
 }
+
+# Update the categories in list_available_models:
+categories = {
+    'Linear': ['linear'],
+    'SVM': ['svr'],
+    'RNN': ['lstm', 'gru', 'gru_attention', 'gru_bidirectional', 'gru_residual']
+}
+
 
 def get_model(name: str, **kwargs):
     """

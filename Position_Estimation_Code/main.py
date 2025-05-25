@@ -3,13 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.training.train_sklearn import train_all_models_enhanced
-from src.training.train_dl import train_lstm_on_all
+from src.training.train_lstm import train_lstm_on_all
+from src.training.train_gru import train_gru_on_all
 from src.data.loader import load_cir_data
 from src.data.feature_engineering import create_engineered_features, select_features
 from src.config import DATA_CONFIG, ANALYSIS_CONFIG, TRAINING_OPTIONS
 import pandas as pd
 import warnings
 import os
+import torch
 
 warnings.filterwarnings('ignore')
 
@@ -99,10 +101,19 @@ def run_analysis():
     print("\n3. Training all models...")
     all_model_results = []
     
+    # Clear GPU memory before starting
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     # Train and add LSTM results first
     lstm_results = train_lstm_on_all(DATA_CONFIG['processed_dir'])
+    
+    # Clear GPU memory after LSTM
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     all_model_results.append({
-        'name': 'lstm',  # Changed to lowercase to match other models
+        'name': 'lstm',
         'type': 'RNN',
         'metrics': {
             'rmse': lstm_results['rmse'],
@@ -110,8 +121,8 @@ def run_analysis():
             'r2': lstm_results.get('r2', None)
         },
         'predictions': {
-            'y_test': lstm_results['r_actual'],  # Map r_actual to y_test
-            'y_pred': lstm_results['r_pred']     # Map r_pred to y_pred
+            'y_test': lstm_results['r_actual'],
+            'y_pred': lstm_results['r_pred']
         } if TRAINING_OPTIONS['save_predictions'] else None,
         'training_history': {
             'train_loss': lstm_results['train_loss'],
@@ -119,6 +130,31 @@ def run_analysis():
         } if TRAINING_OPTIONS['plot_training_history'] else None
     })
     
+    # Train GRU with memory cleanup
+    gru_results = train_gru_on_all(DATA_CONFIG['processed_dir'], model_variant="gru")
+    
+    # Clear GPU memory after GRU
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    all_model_results.append({
+        'name': 'gru',
+        'type': 'RNN',
+        'metrics': {
+            'rmse': gru_results['rmse'],
+            'mae': gru_results.get('mae', None),
+            'r2': gru_results.get('r2', None)
+        },
+        'predictions': {
+            'y_test': gru_results['r_actual'],
+            'y_pred': gru_results['r_pred']
+        } if TRAINING_OPTIONS['save_predictions'] else None,
+        'training_history': {
+            'train_loss': gru_results['train_loss'],
+            'val_loss': gru_results['val_loss']
+        } if TRAINING_OPTIONS['plot_training_history'] else None
+    })
+
     # Train traditional ML models
     sklearn_results = train_all_models_enhanced(
         DATA_CONFIG['processed_dir'], 
