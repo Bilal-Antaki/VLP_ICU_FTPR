@@ -1,9 +1,11 @@
+from src.data.preprocessing import scale_and_sequence
+from src.training.train_dl import train_lstm_on_all
+from sklearn.model_selection import train_test_split
+from src.models.model_registry import get_model
+from sklearn.metrics import mean_squared_error
+from src.data.loader import load_cir_data
 import matplotlib.pyplot as plt
 import numpy as np
-from src.data.loader import load_cir_data, extract_features_and_target
-from src.models.model_registry import get_model
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
 
 def create_aligned_comparison(processed_dir: str):
     """
@@ -14,7 +16,6 @@ def create_aligned_comparison(processed_dir: str):
     print(f"Original dataset size: {len(df)}")
     
     # Create sequences to see what LSTM will actually use
-    from src.data.preprocessing import scale_and_sequence
     seq_len = 10
     X_seq, y_seq, x_scaler, y_scaler = scale_and_sequence(df, seq_len=seq_len)
     
@@ -49,7 +50,6 @@ def create_aligned_comparison(processed_dir: str):
     linear_rmse = np.sqrt(mean_squared_error(y_test, y_pred_linear))
     
     # Train LSTM and get predictions
-    from src.training.train_dl import train_lstm_on_all
     lstm_results = train_lstm_on_all(processed_dir)
     
     # Get LSTM predictions - these correspond to the full aligned dataset

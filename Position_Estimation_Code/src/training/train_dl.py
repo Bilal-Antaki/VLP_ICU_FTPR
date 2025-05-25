@@ -52,7 +52,7 @@ def print_comparison_dataframe(r_actual, r_pred, max_rows=20):
     
     return comparison_df
 
-def train_lstm_on_all(processed_dir: str, batch_size: int = 32, epochs: int = 100, lr: float = 0.01):
+def train_lstm_on_all(processed_dir: str, batch_size: int = 32, epochs: int = 300, lr: float = 0.01):
     # Use longer sequences for better temporal patterns
     seq_len = 10
     

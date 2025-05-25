@@ -1,4 +1,4 @@
-# main_enhanced.py
+# main.py
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -14,7 +14,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 def run_comprehensive_analysis():
-    """Run comprehensive analysis with all models and feature engineering"""
+    """Run comprehensive analysis with Linear, SVR, and LSTM models"""
     processed_dir = "data/processed"
     
     print("=" * 80)
@@ -44,13 +44,15 @@ def run_comprehensive_analysis():
     print(f"\nTotal samples: {len(df_all)}")
     print(f"Unique sources: {df_all['source_file'].nunique()}")
     
-    # 2. Feature Engineering
-    print("\n2. Feature Engineering...")
-    df_engineered = create_engineered_features(df_all, include_coordinates=True, include_categorical=False)
+    # 2. Feature Engineering (NO COORDINATES)
+    print("\n2. Feature Engineering (PL and RMS features only)...")
+    df_engineered = create_engineered_features(df_all, include_coordinates=False, include_categorical=False)
     
-    # Select features
+    # Select features - exclude any coordinate-based features
     feature_cols = [col for col in df_engineered.columns 
-                   if col not in ['r', 'X', 'Y', 'source_file']]
+                   if col not in ['r', 'X', 'Y', 'source_file', 'radius', 'angle', 
+                                 'manhattan_dist', 'quadrant', 'X_Y_ratio', 'Y_X_ratio', 
+                                 'X_Y_product', 'X_normalized', 'Y_normalized']]
     
     X = df_engineered[feature_cols]
     y = df_engineered['r']
@@ -60,162 +62,117 @@ def run_comprehensive_analysis():
     print(f"  Selected {len(selected_features)} features from {len(feature_cols)} total")
     print(f"  Top features: {selected_features[:10]}")
     
-    X_selected = X[selected_features]
-    
     # 3. Train models with basic features
     print("\n3. Training models with BASIC features (PL, RMS only)...")
     results_basic, df_basic, _ = train_all_models_enhanced(
         processed_dir, 
-        include_slow_models=True
+        include_slow_models=False
     )
     
-    # 4. Train models with engineered features
-    print("\n4. Training models with ENGINEERED features...")
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_selected, y, test_size=0.2, random_state=42
-    )
-    
-    # Convert to temporary CSV for compatibility
-    temp_df = pd.concat([X_selected, y], axis=1)
-    temp_df['source_file'] = 'engineered'
-    temp_df.to_csv('data/processed/temp_engineered_CIR.csv', index=False)
-    
-    # Note: This would need modification of train_all_models_enhanced to accept custom features
-    # For now, we'll show the comparison concept
-    
-    # 5. Deep Learning Comparison
-    print("\n5. Training LSTM model...")
+    # 4. Deep Learning Comparison
+    print("\n4. Training LSTM model...")
     lstm_results = train_lstm_on_all(processed_dir)
     
-    # 6. Create comprehensive visualization
-    #create_analysis_figure_set(results_basic, lstm_results, df_all, df_engineered)
+    # 5. Create visualization figures (separate windows)
+    create_analysis_figures(results_basic, lstm_results, df_all)
     
-    # 7. Statistical Analysis
-    print("\n7. Statistical Analysis...")
+    # 6. Statistical Analysis
+    print("\n6. Statistical Analysis...")
     perform_statistical_analysis(results_basic, lstm_results)
     
-    # 8. Save results
+    # 7. Save results
     save_analysis_results(results_basic, lstm_results, df_basic)
 
-def create_analysis_figure_set(sklearn_results, lstm_results, df_raw, df_engineered):
-    # Simulated data for illustration
-    df_raw = pd.DataFrame({
-        'PL': np.random.normal(65, 3, 1000),
-        'RMS': np.random.normal(10, 2, 1000),
-        'r': np.random.uniform(100, 5000, 1000),
-        'X': np.random.uniform(0, 100, 1000),
-        'Y': np.random.uniform(0, 100, 1000)
-    })
-
-    sklearn_results = [
-        {'name': 'linear', 'metrics': {'rmse': 400}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
-        {'name': 'ridge', 'metrics': {'rmse': 395}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
-        {'name': 'lasso', 'metrics': {'rmse': 390}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
-        {'name': 'elastic', 'metrics': {'rmse': 385}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
-        {'name': 'poly', 'metrics': {'rmse': 380}, 'success': True, 'y_test': np.random.rand(100)*2000, 'y_pred': np.random.rand(100)*2000},
-        {'name': 'random_forest', 'metrics': {'rmse': 375}, 'success': True, 'model': type('mock', (), {'feature_importances_': np.array([0.4, 0.6])})()}
-    ]
-
-    lstm_results = {
-        'rmse': 50,
-        'train_loss': np.linspace(1.0, 0.1, 70),
-        'val_loss': np.linspace(1.0, 0.5, 70) + np.random.normal(0, 0.05, 70)
-    }
-
-    # ---- Figure 1: Data Exploration ----
-    fig1, axs1 = plt.subplots(1, 3, figsize=(18, 5))
-
+def create_analysis_figures(sklearn_results, lstm_results, df_raw):
+    """Create separate figure windows for different visualizations"""
+    
+    # Figure 1: Data Exploration
+    fig1, ax = plt.subplots(1, 2, figsize=(12, 5))
+    fig1.suptitle('Data Exploration', fontsize=16)
+    
     # Correlation Heatmap
     correlation_matrix = df_raw[['PL', 'RMS', 'r']].corr()
-    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0, ax=axs1[0])
-    axs1[0].set_title('Feature Correlation Matrix')
-
-    # Feature Distributions
-    df_raw[['PL', 'RMS']].hist(bins=30, ax=axs1[1], alpha=0.7)
-    axs1[1].set_title('Feature Distributions')
-
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0, ax=ax[0])
+    ax[0].set_title('Feature Correlation Matrix')
+    
     # PL vs Distance
-    scatter = axs1[2].scatter(df_raw['r'], df_raw['PL'], c=df_raw['RMS'], cmap='viridis', alpha=0.6, s=20)
-    axs1[2].set_xlabel('Distance (r)')
-    axs1[2].set_ylabel('Path Loss (PL)')
-    axs1[2].set_title('PL vs Distance (colored by RMS)')
-    fig1.colorbar(scatter, ax=axs1[2], label='RMS')
-
+    scatter = ax[1].scatter(df_raw['r'], df_raw['PL'], c=df_raw['RMS'], cmap='viridis', alpha=0.6, s=20)
+    ax[1].set_xlabel('Distance (r)')
+    ax[1].set_ylabel('Path Loss (PL)')
+    ax[1].set_title('PL vs Distance (colored by RMS)')
+    fig1.colorbar(scatter, ax=ax[1], label='RMS')
+    
     plt.tight_layout()
     plt.show()
-
-    # ---- Figure 2: Model Performance ----
-    fig2, axs2 = plt.subplots(1, 3, figsize=(18, 5))
-
+    
+    # Figure 2: Model Performance
+    fig2, ax = plt.subplots(1, 2, figsize=(12, 5))
+    fig2.suptitle('Model Performance Comparison', fontsize=16)
+    
     # Model Performance Comparison
-    model_names = [r['name'] for r in sklearn_results[:5]]
-    rmse_values = [r['metrics']['rmse'] for r in sklearn_results[:5]]
-    model_names.append('LSTM')
-    rmse_values.append(lstm_results['rmse'])
-    bars = axs2[0].barh(model_names, rmse_values)
-    axs2[0].set_xlabel('RMSE')
-    axs2[0].set_title('Top Models by RMSE')
-    bars[np.argmin(rmse_values)].set_color('red')
-
-    # Residual Plot
-    best_model = sklearn_results[0]
-    residuals = np.array(best_model['y_test']) - np.array(best_model['y_pred'])
-    axs2[1].scatter(best_model['y_pred'], residuals, alpha=0.5)
-    axs2[1].axhline(y=0, color='r', linestyle='--')
-    axs2[1].set_xlabel('Predicted Values')
-    axs2[1].set_ylabel('Residuals')
-    axs2[1].set_title(f'Residual Plot - {best_model["name"]}')
-
-    # Error Distribution
-    errors = []
-    labels = []
-    for r in sklearn_results[:5]:
-        if r['success'] and 'y_test' in r and 'y_pred' in r:
-            error = np.abs(np.array(r['y_test']) - np.array(r['y_pred']))
-            errors.append(error)
-            labels.append(r['name'])
-    axs2[2].boxplot(errors, labels=labels)
-    axs2[2].set_ylabel('Absolute Error')
-    axs2[2].set_title('Error Distribution - Top 5 Models')
-    plt.setp(axs2[2].xaxis.get_majorticklabels(), rotation=45)
-
+    if sklearn_results:
+        model_names = [r['name'] for r in sklearn_results[:5] if r['success']]
+        rmse_values = [r['metrics']['rmse'] for r in sklearn_results[:5] if r['success']]
+        model_names.append('LSTM')
+        rmse_values.append(lstm_results['rmse'])
+        
+        bars = ax[0].barh(model_names, rmse_values)
+        ax[0].set_xlabel('RMSE')
+        ax[0].set_title('Model Performance by RMSE')
+        bars[np.argmin(rmse_values)].set_color('red')
+        
+        # Error Distribution
+        errors = []
+        labels = []
+        for r in sklearn_results[:5]:
+            if r['success'] and 'y_test' in r and 'y_pred' in r:
+                error = np.abs(np.array(r['y_test']) - np.array(r['y_pred']))
+                errors.append(error)
+                labels.append(r['name'])
+        
+        if errors:
+            ax[1].boxplot(errors, labels=labels)
+            ax[1].set_ylabel('Absolute Error')
+            ax[1].set_title('Error Distribution - Top Models')
+            plt.setp(ax[1].xaxis.get_majorticklabels(), rotation=45, ha='right')
+    
     plt.tight_layout()
     plt.show()
-
-    # ---- Figure 3: LSTM & Feature Insights ----
-    fig3, axs3 = plt.subplots(1, 3, figsize=(18, 5))
-
-    # LSTM Training History
-    axs3[0].plot(lstm_results['train_loss'], label='Train Loss')
-    axs3[0].plot(lstm_results['val_loss'], label='Val Loss')
-    axs3[0].set_xlabel('Epoch')
-    axs3[0].set_ylabel('Loss')
-    axs3[0].set_title('LSTM Training History')
-    axs3[0].legend()
-
-    # Feature Importance
-    tree_model = sklearn_results[-1]
-    importances = tree_model['model'].feature_importances_
-    features = ['PL', 'RMS']
-    axs3[1].bar(features, importances)
-    axs3[1].set_title(f'Feature Importances - {tree_model["name"]}')
-    axs3[1].set_ylabel('Importance')
-
-    # 2D Path Loss Heatmap
-    heatmap_data = df_raw.pivot_table(
-        values='PL',
-        index=pd.cut(df_raw['Y'], bins=20),
-        columns=pd.cut(df_raw['X'], bins=20),
-        aggfunc='mean'
-    )
-    sns.heatmap(heatmap_data, cmap='RdYlBu_r', ax=axs3[2], cbar_kws={'label': 'Avg PL'})
-    axs3[2].set_title('Path Loss Heatmap')
-    axs3[2].set_xlabel('X bins')
-    axs3[2].set_ylabel('Y bins')
-
+    
+    # Figure 3: LSTM Training History
+    fig3, ax = plt.subplots(1, 1, figsize=(8, 6))
+    fig3.suptitle('LSTM Training History', fontsize=16)
+    
+    ax.plot(lstm_results['train_loss'], label='Train Loss', linewidth=2)
+    ax.plot(lstm_results['val_loss'], label='Val Loss', linewidth=2)
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Loss')
+    ax.set_title('Training and Validation Loss')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    ax.set_yscale('log')
+    
     plt.tight_layout()
     plt.show()
-
+    
+    # Figure 4: Feature Distributions
+    fig4, ax = plt.subplots(1, 2, figsize=(12, 5))
+    fig4.suptitle('Feature Distributions', fontsize=16)
+    
+    ax[0].hist(df_raw['PL'], bins=30, alpha=0.7, label='PL')
+    ax[0].set_xlabel('Path Loss (PL)')
+    ax[0].set_ylabel('Frequency')
+    ax[0].set_title('Path Loss Distribution')
+    ax[0].grid(True, alpha=0.3)
+    
+    ax[1].hist(df_raw['RMS'], bins=30, alpha=0.7, label='RMS', color='orange')
+    ax[1].set_xlabel('RMS Delay Spread')
+    ax[1].set_ylabel('Frequency')
+    ax[1].set_title('RMS Delay Spread Distribution')
+    ax[1].grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
 
 def perform_statistical_analysis(sklearn_results, lstm_results):
     """Perform statistical analysis of results"""
@@ -239,25 +196,10 @@ def perform_statistical_analysis(sklearn_results, lstm_results):
     print(f"  Max RMSE: {np.max(rmse_values):.4f}")
     print(f"  LSTM RMSE: {lstm_results['rmse']:.4f}")
     
-    # Performance categories
-    excellent = sum(1 for r in rmse_values if r < 50)
-    good = sum(1 for r in rmse_values if 50 <= r < 100)
-    fair = sum(1 for r in rmse_values if 100 <= r < 150)
-    poor = sum(1 for r in rmse_values if r >= 150)
-    
-    print(f"\nPerformance Distribution:")
-    print(f"  Excellent (<50): {excellent}")
-    print(f"  Good (50-100): {good}")
-    print(f"  Fair (100-150): {fair}")
-    print(f"  Poor (>150): {poor}")
-    
     # Model type analysis
     model_types = {
-        'Linear': ['linear'],
-        'SVM': ['svr'],
-        'Tree': ['forest', 'tree'],
-        #'Neural': ['mlp'],
-        #'Neighbors': ['knn']
+        'Linear': ['linear', 'ridge', 'lasso', 'elastic', 'poly'],
+        'SVM': ['svr']
     }
     
     print(f"\nPerformance by Model Type:")
@@ -269,6 +211,10 @@ def perform_statistical_analysis(sklearn_results, lstm_results):
 
 def save_analysis_results(sklearn_results, lstm_results, comparison_df):
     """Save analysis results to files"""
+    
+    # Create results directory if it doesn't exist
+    import os
+    os.makedirs('results', exist_ok=True)
     
     # Save detailed results
     results_summary = {
@@ -298,7 +244,7 @@ def save_analysis_results(sklearn_results, lstm_results, comparison_df):
         f.write("POSITION ESTIMATION ANALYSIS REPORT\n")
         f.write("="*60 + "\n\n")
         
-        f.write("Top 10 Models:\n")
+        f.write("Top Models (Linear and SVR only):\n")
         for i, r in enumerate(sklearn_results[:10]):
             if r['success']:
                 f.write(f"{i+1}. {r['name']}: RMSE={r['metrics']['rmse']:.4f}\n")
@@ -308,8 +254,5 @@ def save_analysis_results(sklearn_results, lstm_results, comparison_df):
 if __name__ == "__main__":
     # Run comprehensive analysis
     run_comprehensive_analysis()
-    
-    # Or run automated model selection
-    #best_model = automated_model_selection("data/processed")
     
     print("\nAnalysis complete!")

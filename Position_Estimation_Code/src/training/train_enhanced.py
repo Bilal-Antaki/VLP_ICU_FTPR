@@ -43,7 +43,7 @@ def train_model_with_metrics(model_name, X_train, X_test, y_train, y_test, **mod
             'success': True,
             'model': model,
             'y_pred': y_pred,
-            'y_test': y_test,  # Add y_test to results
+            'y_test': y_test,
             'metrics': metrics,
             'name': model_name
         }
@@ -56,38 +56,11 @@ def train_model_with_metrics(model_name, X_train, X_test, y_train, y_test, **mod
             'name': model_name
         }
 
-def hyperparameter_search(model_name, X_train, y_train, param_grid, cv=5):
-    """Perform hyperparameter search for a model"""
-    base_model = get_model(model_name)
-    
-    grid_search = GridSearchCV(
-        base_model, 
-        param_grid, 
-        cv=cv,
-        scoring='neg_mean_squared_error',
-        n_jobs=-1,
-        verbose=0
-    )
-    
-    grid_search.fit(X_train, y_train)
-    
-    return {
-        'best_params': grid_search.best_params_,
-        'best_score': np.sqrt(-grid_search.best_score_),
-        'model': grid_search.best_estimator_
-    }
-
 def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2, 
-                            include_slow_models: bool = True,
+                            include_slow_models: bool = False,
                             include_deep_learning: bool = False):
     """
-    Train and compare all available models with comprehensive metrics
-    
-    Args:
-        processed_dir: Directory with processed data
-        test_size: Test set size
-        include_slow_models: Include computationally expensive models
-        include_deep_learning: Include deep learning models (requires separate handling)
+    Train and compare Linear and SVR models with comprehensive metrics
     """
     print("Enhanced Model Training and Evaluation")
     print("=" * 60)
@@ -112,76 +85,21 @@ def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2,
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    # Define models to test with configurations
+    # Define models to test - ONLY Linear and SVR variants
     model_configs = [
         # Linear models
         ('Linear Regression', 'linear', {}, False),
-        ('Ridge (α=0.1)', 'ridge', {'alpha': 0.1}, True),
         ('Ridge (α=1.0)', 'ridge', {'alpha': 1.0}, True),
         ('Ridge (α=10)', 'ridge', {'alpha': 10.0}, True),
-        ('Lasso (α=0.01)', 'lasso', {'alpha': 0.01}, True),
         ('Lasso (α=0.1)', 'lasso', {'alpha': 0.1}, True),
         ('ElasticNet', 'elastic', {'alpha': 0.1, 'l1_ratio': 0.5}, True),
         ('Polynomial (deg=2)', 'poly', {'degree': 2}, False),
-        ('Polynomial (deg=3)', 'poly', {'degree': 3}, False),
         
         # SVM models
         ('SVR RBF', 'svr', {}, False),
         ('SVR Linear', 'svr_linear', {'C': 10.0}, False),
         ('SVR Poly', 'svr_poly', {'degree': 2, 'C': 10.0}, False),
     ]
-    
-    # Try to add optional models
-    from src.models.model_registry import MODEL_REGISTRY
-    
-    if 'knn' in MODEL_REGISTRY:
-        model_configs.extend([
-            ('KNN (k=5)', 'knn', {'n_neighbors': 5}, True),
-            ('KNN (k=7)', 'knn', {'n_neighbors': 7}, True),
-            ('KNN (k=10)', 'knn', {'n_neighbors': 10}, True),
-            ('KNN Distance Weighted', 'knn_distance', {'n_neighbors': 7}, True),
-        ])
-    
-    if 'mlp' in MODEL_REGISTRY:
-        model_configs.extend([
-            ('MLP (100,50)', 'mlp', {'hidden_layers': (100, 50)}, True),
-            ('MLP (64,32,16)', 'mlp', {'hidden_layers': (64, 32, 16)}, True),
-        ])
-    
-    if 'random_forest' in MODEL_REGISTRY:
-        model_configs.extend([
-            ('Random Forest (100)', 'random_forest', {'n_estimators': 100}, False),
-            ('Random Forest (200)', 'random_forest', {'n_estimators': 200}, False),
-        ])
-    
-    if 'gradient_boosting' in MODEL_REGISTRY:
-        model_configs.append(('Gradient Boosting', 'gradient_boosting', {'n_estimators': 100}, False))
-        
-    if 'extra_trees' in MODEL_REGISTRY:
-        model_configs.append(('Extra Trees', 'extra_trees', {'n_estimators': 100}, False))
-    
-    if 'adaboost' in MODEL_REGISTRY:
-        model_configs.append(('AdaBoost', 'adaboost', {'n_estimators': 50}, False))
-    
-    # Add slow models if requested
-    if include_slow_models:
-        model_configs.extend([
-            ('Random Forest (500)', 'random_forest', {'n_estimators': 500}, False),
-            ('GB (200 trees)', 'gradient_boosting', {'n_estimators': 200}, False),
-            ('Voting Ensemble', 'voting', {}, False),
-            ('Bagging', 'bagging', {'n_estimators': 50}, False),
-        ])
-        
-        # Try to add XGBoost and LightGBM
-        try:
-            model_configs.append(('XGBoost', 'xgboost', {'n_estimators': 100}, False))
-        except:
-            print("XGBoost not available")
-            
-        try:
-            model_configs.append(('LightGBM', 'lightgbm', {'n_estimators': 100}, False))
-        except:
-            print("LightGBM not available")
     
     # Train all models
     results = []
@@ -191,7 +109,7 @@ def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2,
     print("-" * 60)
     
     for display_name, model_name, kwargs, needs_scaling in model_configs:
-        print(f"\nTraining {display_name}...", end=' ')
+        print(f"\nTraining {display_name}...", end=' ', flush=True)
         
         # Use scaled or unscaled data
         X_tr = X_train_scaled if needs_scaling else X_train
@@ -202,7 +120,14 @@ def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2,
         )
         
         if result['success']:
-            print(f"✓ RMSE: {result['metrics']['rmse']:.4f}, Time: {result['metrics']['train_time']:.2f}s")
+            # Format time properly
+            train_time = result['metrics']['train_time']
+            if train_time < 1:
+                time_str = f"{train_time:.3f}s"
+            else:
+                time_str = f"{train_time:.2f}s"
+            
+            print(f"✓ RMSE: {result['metrics']['rmse']:.4f}, Time: {time_str}")
             results.append(result)
             successful_results.append({
                 'name': display_name,
@@ -214,7 +139,7 @@ def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2,
     
     if not results:
         print("\nNo models trained successfully!")
-        return None, None
+        return None, None, None
     
     # Create comparison DataFrame
     print("\n" + "=" * 80)
@@ -224,11 +149,16 @@ def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2,
     metrics_list = [r['metrics'] for r in results]
     comparison_df = pd.DataFrame(metrics_list)
     
+    # Format time column
+    comparison_df['train_time_formatted'] = comparison_df['train_time'].apply(
+        lambda x: f"{x:.3f}s" if x < 1 else f"{x:.2f}s"
+    )
+    
     # Select columns to display
     display_columns = [
         'model_name', 'rmse', 'mae', 'r2', 'mape', 
         'median_abs_error', 'p90_error', 'max_error',
-        'cv_rmse', 'train_time'
+        'cv_rmse', 'train_time_formatted'
     ]
     
     display_df = comparison_df[display_columns].round(4)
@@ -238,11 +168,11 @@ def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2,
     
     # Best models summary
     print("\n" + "=" * 60)
-    print("TOP 5 MODELS BY RMSE")
+    print("TOP 3 MODELS BY RMSE")
     print("=" * 60)
     
-    top_5 = display_df.head(5)
-    for idx, row in top_5.iterrows():
+    top_3 = display_df.head(3)
+    for idx, row in top_3.iterrows():
         print(f"\n{row['model_name']}:")
         print(f"  RMSE: {row['rmse']:.4f}")
         print(f"  MAE:  {row['mae']:.4f}")
@@ -268,14 +198,10 @@ def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2,
 def automated_model_selection(processed_dir: str, metric='rmse'):
     """
     Automatically select the best model based on cross-validation
-    
-    Args:
-        processed_dir: Directory with processed data
-        metric: Metric to optimize ('rmse', 'mae', 'r2')
     """
     results, comparison_df, best_model = train_all_models_enhanced(
         processed_dir, 
-        include_slow_models=True
+        include_slow_models=False
     )
     
     if results is None:

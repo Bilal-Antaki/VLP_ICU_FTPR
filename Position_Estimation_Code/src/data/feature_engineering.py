@@ -4,14 +4,14 @@ import pandas as pd
 from sklearn.preprocessing import PolynomialFeatures
 from scipy import stats
 
-def create_engineered_features(df, features=['PL', 'RMS'], include_coordinates=False, include_categorical=True):
+def create_engineered_features(df, features=['PL', 'RMS'], include_coordinates=False, include_categorical=False):
     """
     Create engineered features for better model performance
     
     Args:
         df: Input DataFrame with at least PL and RMS columns
-        features: Base features to use
-        include_coordinates: Whether to include X, Y coordinates as features
+        features: Base features to use (ONLY PL and RMS)
+        include_coordinates: DEPRECATED - always False
         include_categorical: Whether to include categorical interaction features
         
     Returns:
@@ -19,7 +19,7 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_coordinates=F
     """
     feature_df = df.copy()
     
-    # 1. Basic features
+    # ONLY use PL and RMS features
     if 'PL' in df.columns and 'RMS' in df.columns:
         # Ratio features
         feature_df['PL_RMS_ratio'] = df['PL'] / (df['RMS'] + 1e-10)
@@ -46,29 +46,7 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_coordinates=F
         feature_df['PL_exp'] = np.exp(df['PL'] / 100)
         feature_df['RMS_exp'] = np.exp(df['RMS'] / 10)
     
-    # 2. Coordinate-based features if available
-    if include_coordinates and 'X' in df.columns and 'Y' in df.columns:
-        # Polar coordinates
-        feature_df['radius'] = np.sqrt(df['X']**2 + df['Y']**2)
-        feature_df['angle'] = np.arctan2(df['Y'], df['X'])
-        
-        # Distance from origin
-        feature_df['manhattan_dist'] = np.abs(df['X']) + np.abs(df['Y'])
-        
-        # Quadrant information
-        feature_df['quadrant'] = (
-            (df['X'] >= 0).astype(int) * 2 + 
-            (df['Y'] >= 0).astype(int)
-        )
-        
-        # Coordinate ratios
-        feature_df['X_Y_ratio'] = df['X'] / (df['Y'] + 1e-10)
-        feature_df['Y_X_ratio'] = df['Y'] / (df['X'] + 1e-10)
-        
-        # Coordinate products
-        feature_df['X_Y_product'] = df['X'] * df['Y']
-        
-    # 3. Statistical features (if we have grouped data)
+    # Statistical features (if we have grouped data)
     if 'source_file' in df.columns:
         # Add group statistics
         for feature in features:
@@ -81,15 +59,7 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_coordinates=F
                     (feature_df[f'{feature}_group_std'] + 1e-10)
                 )
     
-    # 4. Domain-specific features for wireless propagation
-    if 'PL' in df.columns:
-        # Free space path loss at 2.4 GHz reference
-        if 'radius' in feature_df.columns:
-            freq_ghz = 2.4  # Assumed frequency
-            feature_df['FSPL_2.4GHz'] = 20 * np.log10(feature_df['radius'] + 1e-10) + 20 * np.log10(freq_ghz * 1e9) - 147.55
-            feature_df['PL_excess'] = df['PL'] - feature_df['FSPL_2.4GHz']
-    
-    # 5. Interaction features (only if requested)
+    # Interaction features (only if requested)
     if include_categorical and 'PL' in df.columns and 'RMS' in df.columns:
         # Binned interactions
         try:
@@ -104,8 +74,15 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_coordinates=F
             # Drop the original categorical column
             feature_df = feature_df.drop('PL_RMS_interaction', axis=1)
         except:
-            # Skip if binning fails (e.g., too few unique values)
+            # Skip if binning fails
             pass
+    
+    # Remove any coordinate-based features if they exist
+    coordinate_cols = ['X', 'Y', 'radius', 'angle', 'manhattan_dist', 'quadrant', 
+                      'X_Y_ratio', 'Y_X_ratio', 'X_Y_product', 'X_normalized', 'Y_normalized']
+    for col in coordinate_cols:
+        if col in feature_df.columns:
+            feature_df = feature_df.drop(col, axis=1)
     
     return feature_df
 
@@ -124,6 +101,12 @@ def select_features(X, y, method='correlation', threshold=0.1):
     """
     # First, identify numeric columns only
     numeric_columns = X.select_dtypes(include=[np.number]).columns.tolist()
+    
+    # Remove any coordinate-based features
+    coordinate_cols = ['X', 'Y', 'radius', 'angle', 'manhattan_dist', 'quadrant',
+                      'X_Y_ratio', 'Y_X_ratio', 'X_Y_product', 'X_normalized', 'Y_normalized']
+    numeric_columns = [col for col in numeric_columns if col not in coordinate_cols]
+    
     X_numeric = X[numeric_columns]
     
     if len(numeric_columns) == 0:
@@ -151,86 +134,3 @@ def select_features(X, y, method='correlation', threshold=0.1):
             selected_features.append(feat)
     
     return selected_features
-
-def create_polynomial_features(X, degree=2, include_bias=False):
-    """
-    Create polynomial features
-    
-    Args:
-        X: Input features
-        degree: Polynomial degree
-        include_bias: Whether to include bias term
-        
-    Returns:
-        Polynomial features array and feature names
-    """
-    poly = PolynomialFeatures(degree=degree, include_bias=include_bias)
-    X_poly = poly.fit_transform(X)
-    
-    # Get feature names
-    feature_names = poly.get_feature_names_out(X.columns if hasattr(X, 'columns') else None)
-    
-    return X_poly, feature_names
-
-def create_distance_features(df):
-    """
-    Create distance-based features specifically for position estimation
-    
-    Args:
-        df: DataFrame with position data
-        
-    Returns:
-        DataFrame with distance features
-    """
-    feature_df = pd.DataFrame()
-    
-    if 'X' in df.columns and 'Y' in df.columns:
-        # Various distance metrics
-        feature_df['euclidean_dist'] = np.sqrt(df['X']**2 + df['Y']**2)
-        feature_df['manhattan_dist'] = np.abs(df['X']) + np.abs(df['Y'])
-        feature_df['chebyshev_dist'] = np.maximum(np.abs(df['X']), np.abs(df['Y']))
-        feature_df['canberra_dist'] = (np.abs(df['X']) + np.abs(df['Y'])) / (np.abs(df['X']) + np.abs(df['Y']) + 1e-10)
-        
-        # Log-distance features
-        feature_df['log_euclidean'] = np.log1p(feature_df['euclidean_dist'])
-        feature_df['log_manhattan'] = np.log1p(feature_df['manhattan_dist'])
-        
-        # Normalized coordinates
-        max_coord = np.maximum(np.abs(df['X']).max(), np.abs(df['Y']).max())
-        feature_df['X_normalized'] = df['X'] / (max_coord + 1e-10)
-        feature_df['Y_normalized'] = df['Y'] / (max_coord + 1e-10)
-        
-    return feature_df
-
-def create_lag_features(df, features=['PL', 'RMS'], lags=[1, 2, 3]):
-    """
-    Create lag features for time-series like data
-    
-    Args:
-        df: Input DataFrame (should be sorted by some order)
-        features: Features to create lags for
-        lags: List of lag values
-        
-    Returns:
-        DataFrame with lag features
-    """
-    feature_df = df.copy()
-    
-    for feature in features:
-        if feature in df.columns:
-            for lag in lags:
-                feature_df[f'{feature}_lag{lag}'] = df[feature].shift(lag)
-                
-            # Rolling statistics
-            for window in [3, 5]:
-                feature_df[f'{feature}_rolling_mean_{window}'] = (
-                    df[feature].rolling(window=window, center=True).mean()
-                )
-                feature_df[f'{feature}_rolling_std_{window}'] = (
-                    df[feature].rolling(window=window, center=True).std()
-                )
-    
-    # Fill NaN values
-    feature_df = feature_df.fillna(method='bfill').fillna(method='ffill')
-    
-    return feature_df

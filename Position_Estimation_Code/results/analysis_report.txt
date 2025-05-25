@@ -1,16 +1,15 @@
 POSITION ESTIMATION ANALYSIS REPORT
 ============================================================
 
-Top 10 Models:
+Top Models (Linear and SVR only):
 1. linear: RMSE=414.5674
-2. svr: RMSE=425.3168
-3. svr_poly: RMSE=452.6635
-4. random_forest: RMSE=485.7839
-5. random_forest: RMSE=487.2792
-6. gradient_boosting: RMSE=473.8371
-7. random_forest: RMSE=481.1427
-8. gradient_boosting: RMSE=497.5883
-9. voting: RMSE=426.6566
-10. bagging: RMSE=479.2684
+2. ridge: RMSE=415.0237
+3. ridge: RMSE=424.0028
+4. lasso: RMSE=414.5787
+5. elastic: RMSE=421.7341
+6. poly: RMSE=416.8962
+7. svr: RMSE=425.3168
+8. svr_linear: RMSE=449.5048
+9. svr_poly: RMSE=452.6635
 
-LSTM Performance: RMSE=157.6632
+LSTM Performance: RMSE=139.1377
