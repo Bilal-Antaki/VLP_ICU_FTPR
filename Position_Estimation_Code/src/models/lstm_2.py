@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import pandas as pd
+from ..config import MODEL_CONFIG, TRAINING_CONFIG, FEATURE_CONFIG
 
 class SequenceToSequenceLSTM(nn.Module):
     """
@@ -12,37 +13,38 @@ class SequenceToSequenceLSTM(nn.Module):
     Input: 10-step sequence with engineered features
     Output: 10-step sequence of r values
     """
-    def __init__(self, input_dim, hidden_dim=128, num_layers=3, dropout=0.3):
+    def __init__(self, input_dim):
         super(SequenceToSequenceLSTM, self).__init__()
         
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
+        self.hidden_dim = MODEL_CONFIG['hidden_dim']
+        self.num_layers = MODEL_CONFIG['num_layers']
+        self.dropout = MODEL_CONFIG['dropout']
         
         # Encoder LSTM
         self.encoder = nn.LSTM(
             input_dim, 
-            hidden_dim, 
-            num_layers, 
+            self.hidden_dim, 
+            self.num_layers, 
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0,
+            dropout=self.dropout if self.num_layers > 1 else 0,
             bidirectional=True
         )
         
         # Decoder LSTM 
         self.decoder = nn.LSTM(
-            hidden_dim * 2,  # *2 for bidirectional
-            hidden_dim,
-            num_layers,
+            self.hidden_dim * 2,  # *2 for bidirectional
+            self.hidden_dim,
+            self.num_layers,
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0
+            dropout=self.dropout if self.num_layers > 1 else 0
         )
         
         # Output layers
         self.fc = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.Linear(self.hidden_dim, self.hidden_dim // 2),
             nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim // 2, 1)
+            nn.Dropout(self.dropout),
+            nn.Linear(self.hidden_dim // 2, 1)
         )
         
     def forward(self, x):
@@ -83,8 +85,11 @@ def engineer_features(pl, rms):
     }
     return pd.DataFrame(features)
 
-def select_best_features(X, y, threshold=0.1):
+def select_best_features(X, y, threshold=None):
     """Select features based on correlation with target"""
+    if threshold is None:
+        threshold = FEATURE_CONFIG['correlation_threshold']
+        
     correlations = []
     for col in X.columns:
         corr = np.corrcoef(X[col].values.flatten(), y.values.flatten())[0, 1]
@@ -94,17 +99,20 @@ def select_best_features(X, y, threshold=0.1):
     selected_features = [col for col, corr in correlations if corr > threshold]
     
     # Always include base features
-    for feat in ['PL', 'RMS']:
+    for feat in FEATURE_CONFIG['base_features']:
         if feat not in selected_features:
             selected_features.append(feat)
     
     return selected_features
 
-def prepare_simulation_data(df, sim_length=10):
+def prepare_simulation_data(df, sim_length=None):
     """
     Prepare data by separating into simulations
     Returns sequences of shape (n_simulations, sim_length, n_features)
     """
+    if sim_length is None:
+        sim_length = FEATURE_CONFIG['simulation_length']
+        
     n_simulations = len(df) // sim_length
     
     # Extract features and target
@@ -112,7 +120,7 @@ def prepare_simulation_data(df, sim_length=10):
     target = df['r'].values
     
     # Select best features
-    selected_features = select_best_features(features_df, df['r'], threshold=0.1)
+    selected_features = select_best_features(features_df, df['r'])
     print(f"Selected features: {selected_features}")
     
     # Reshape into simulations
@@ -121,10 +129,16 @@ def prepare_simulation_data(df, sim_length=10):
     
     return X, y, selected_features
 
-def train_sequence_lstm(df, train_simulations=16, epochs=600, batch_size=8, lr=0.001):
+def train_sequence_lstm(df, train_simulations=None, epochs=None, batch_size=None, lr=None):
     """
-    Train LSTM on first 16 simulations, predict last 4 simulations
+    Train LSTM model using configuration parameters
     """
+    # Use config values if not specified
+    train_simulations = train_simulations or TRAINING_CONFIG['train_simulations']
+    epochs = epochs or TRAINING_CONFIG['epochs']
+    batch_size = batch_size or TRAINING_CONFIG['batch_size']
+    lr = lr or TRAINING_CONFIG['learning_rate']
+    
     # Prepare data
     X, y, feature_names = prepare_simulation_data(df)
     
@@ -132,7 +146,7 @@ def train_sequence_lstm(df, train_simulations=16, epochs=600, batch_size=8, lr=0
     print(f"Sequence shape: {X.shape}")
     print(f"Target shape: {y.shape}")
     
-    # Split into train (first 16) and test (last 4)
+    # Split into train and test
     X_train = X[:train_simulations]
     y_train = y[:train_simulations]
     X_test = X[train_simulations:]
@@ -140,7 +154,9 @@ def train_sequence_lstm(df, train_simulations=16, epochs=600, batch_size=8, lr=0
     
     # Further split training data for validation
     X_train, X_val, y_train, y_val = train_test_split(
-        X_train, y_train, test_size=0.2, random_state=42
+        X_train, y_train, 
+        test_size=TRAINING_CONFIG['validation_split'], 
+        random_state=TRAINING_CONFIG['random_seed']
     )
     
     # Scale features and target
@@ -176,7 +192,11 @@ def train_sequence_lstm(df, train_simulations=16, epochs=600, batch_size=8, lr=0
     
     # Loss and optimizer
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
+    optimizer = torch.optim.Adam(
+        model.parameters(), 
+        lr=lr, 
+        weight_decay=TRAINING_CONFIG['weight_decay']
+    )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=15
     )

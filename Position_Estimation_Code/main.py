@@ -6,15 +6,15 @@ from src.training.train_sklearn import train_all_models_enhanced
 from src.training.train_dl import train_lstm_on_all
 from src.data.loader import load_cir_data
 from src.data.feature_engineering import create_engineered_features, select_features
+from src.config import DATA_CONFIG, ANALYSIS_CONFIG, TRAINING_OPTIONS
 import pandas as pd
 import warnings
+import os
 
 warnings.filterwarnings('ignore')
 
 def run_analysis():
     """Run analysis with Linear, SVR, and LSTM models"""
-    processed_dir = "data/processed"
-    
     print("=" * 80)
     print(" " * 20 + "COMPREHENSIVE POSITION ESTIMATION ANALYSIS")
     print("=" * 80)
@@ -24,9 +24,9 @@ def run_analysis():
     df_list = []
     
     # Load all available datasets
-    for keyword in ['FCPR-D1']:
+    for keyword in DATA_CONFIG['datasets']:
         try:
-            df_temp = load_cir_data(processed_dir, filter_keyword=keyword)
+            df_temp = load_cir_data(DATA_CONFIG['processed_dir'], filter_keyword=keyword)
             print(f"  Loaded {keyword}: {len(df_temp)} samples")
             df_list.append(df_temp)
         except:
@@ -48,15 +48,17 @@ def run_analysis():
     
     # Select features - exclude any coordinate-based features
     feature_cols = [col for col in df_engineered.columns 
-                   if col not in ['r', 'X', 'Y', 'source_file', 'radius', 'angle', 
-                                 'manhattan_dist', 'quadrant', 'X_Y_ratio', 'Y_X_ratio', 
-                                 'X_Y_product', 'X_normalized', 'Y_normalized']]
+                   if col not in ANALYSIS_CONFIG['feature_selection']['excluded_features']]
     
     X = df_engineered[feature_cols]
-    y = df_engineered['r']
+    y = df_engineered[DATA_CONFIG['target_column']]
 
     # Select best features
-    selected_features = select_features(X, y, method='correlation', threshold=0.3)
+    selected_features = select_features(
+        X, y, 
+        method='correlation', 
+        threshold=ANALYSIS_CONFIG['feature_selection']['correlation_threshold']
+    )
     print(f"  Selected {len(selected_features)} features from {len(feature_cols)} total")
     print(f"  Top features: {selected_features[:10]}")
     
@@ -66,8 +68,8 @@ def run_analysis():
     
     # Train traditional ML models
     sklearn_results = train_all_models_enhanced(
-        processed_dir, 
-        include_slow_models=False
+        DATA_CONFIG['processed_dir'], 
+        include_slow_models=TRAINING_OPTIONS['include_slow_models']
     )
     
     # Add successful sklearn results to all_model_results
@@ -80,12 +82,12 @@ def run_analysis():
                 'predictions': {
                     'y_test': result.get('y_test', []),
                     'y_pred': result.get('y_pred', [])
-                },
+                } if TRAINING_OPTIONS['save_predictions'] else None,
                 'training_history': None
             })
     
     # Train and add LSTM results
-    lstm_results = train_lstm_on_all(processed_dir)
+    lstm_results = train_lstm_on_all(DATA_CONFIG['processed_dir'])
     all_model_results.append({
         'name': 'LSTM',
         'type': 'RNN',
@@ -97,28 +99,33 @@ def run_analysis():
         'predictions': {
             'y_test': lstm_results.get('y_test', []),
             'y_pred': lstm_results.get('y_pred', [])
-        },
+        } if TRAINING_OPTIONS['save_predictions'] else None,
         'training_history': {
             'train_loss': lstm_results['train_loss'],
             'val_loss': lstm_results['val_loss']
-        }
+        } if TRAINING_OPTIONS['plot_training_history'] else None
     })
     
     # 4. Create visualization figures
-    #create_analysis_figures(all_model_results, df_all)
+    if TRAINING_OPTIONS['plot_training_history']:
+        create_analysis_figures(all_model_results, df_all)
     
     # 5. Statistical Analysis
-    print("\n5. Statistical Analysis...")
+    print("\n4. Statistical Analysis...")
     perform_statistical_analysis(all_model_results)
     
     # 6. Save results
-    save_analysis_results(all_model_results)
+    if TRAINING_OPTIONS['save_predictions']:
+        print("\n5. Saving Results...")
+        save_analysis_results(all_model_results)
+    
+    print("\nAnalysis complete.")
 
 def create_analysis_figures(model_results, df_raw):
     """Create separate figure windows for different visualizations"""
     
     # Figure 1: Data Exploration
-    fig1, ax = plt.subplots(1, 2, figsize=(12, 5))
+    fig1, ax = plt.subplots(1, 2, figsize=ANALYSIS_CONFIG['visualization']['figure_sizes']['data_exploration'])
     fig1.suptitle('Data Exploration', fontsize=16)
     
     # Correlation Heatmap
@@ -127,7 +134,14 @@ def create_analysis_figures(model_results, df_raw):
     ax[0].set_title('Feature Correlation Matrix')
     
     # PL vs Distance
-    scatter = ax[1].scatter(df_raw['r'], df_raw['PL'], c=df_raw['RMS'], cmap='viridis', alpha=0.6, s=20)
+    scatter = ax[1].scatter(
+        df_raw['r'], 
+        df_raw['PL'], 
+        c=df_raw['RMS'], 
+        cmap='viridis', 
+        alpha=ANALYSIS_CONFIG['visualization']['scatter_alpha'], 
+        s=ANALYSIS_CONFIG['visualization']['scatter_size']
+    )
     ax[1].set_xlabel('Distance (r)')
     ax[1].set_ylabel('Path Loss (PL)')
     ax[1].set_title('PL vs Distance (colored by RMS)')
@@ -137,7 +151,11 @@ def create_analysis_figures(model_results, df_raw):
     plt.show()
     
     # Figure 2: Model Performance Comparison
-    fig2, axes = plt.subplots(2, 1, figsize=(12, 10), height_ratios=[1, 1])
+    fig2, axes = plt.subplots(
+        2, 1, 
+        figsize=ANALYSIS_CONFIG['visualization']['figure_sizes']['model_comparison'], 
+        height_ratios=ANALYSIS_CONFIG['visualization']['height_ratios']
+    )
     fig2.suptitle('Model Performance Comparison', fontsize=16)
     
     # Sort models by RMSE for better visualization
@@ -150,7 +168,7 @@ def create_analysis_figures(model_results, df_raw):
     bars = axes[0].barh(model_names, rmse_values)
     axes[0].set_xlabel('RMSE')
     axes[0].set_title('Model Performance by RMSE')
-    axes[0].grid(True, alpha=0.3)
+    axes[0].grid(True, alpha=ANALYSIS_CONFIG['visualization']['grid_alpha'])
     
     # Color code bars by model type
     for i, result in enumerate(model_results):
@@ -163,7 +181,7 @@ def create_analysis_figures(model_results, df_raw):
     axes[1].set_title('Training History')
     axes[1].set_xlabel('Epoch')
     axes[1].set_ylabel('Loss')
-    axes[1].grid(True, alpha=0.3)
+    axes[1].grid(True, alpha=ANALYSIS_CONFIG['visualization']['grid_alpha'])
     axes[1].set_yscale('log')
     
     for result in model_results:
@@ -188,25 +206,38 @@ def create_analysis_figures(model_results, df_raw):
 
 def perform_statistical_analysis(model_results):
     """Perform statistical analysis of results"""
-    print("\n" + "="*60)
-    print("STATISTICAL ANALYSIS")
+    print("\nSTATISTICAL ANALYSIS")
     print("="*60)
     
     # Overall statistics
     rmse_values = [r['metrics']['rmse'] for r in model_results]
-    print(f"\nOverall Model Performance:")
+    mae_values = [r['metrics'].get('mae', 0) for r in model_results]
+    r2_values = [r['metrics'].get('r2', 0) for r in model_results]
+    
+    print("\nOverall Model Performance:")
     print(f"  Mean RMSE: {np.mean(rmse_values):.4f}")
     print(f"  Best RMSE: {np.min(rmse_values):.4f}")
+    print(f"  Std RMSE: {np.std(rmse_values):.4f}")
+    
+    # Only print MAE and R2 statistics if available for all models
+    if all(mae_values):
+        print(f"  Mean MAE: {np.mean(mae_values):.4f}")
+    if all(r2_values):
+        print(f"  Mean R2: {np.mean(r2_values):.4f}")
     
     # List all models trained
     model_names = [r['name'] for r in model_results]
-    print(f"\nModels trained: {model_names}")
+    print(f"\nModels trained: {', '.join(model_names)}")
     
     # Individual model results
     print("\nDetailed Model Results:")
     print("-" * 40)
     
-    for result in model_results:
+    # Sort results by RMSE for better readability
+    sorted_results = sorted(model_results, key=lambda x: x['metrics']['rmse'])
+    best_rmse = min(rmse_values)
+    
+    for result in sorted_results:
         print(f"\n{result['name']}:")
         print(f"  RMSE: {result['metrics']['rmse']:.4f}")
         if result['metrics'].get('mae'):
@@ -215,18 +246,22 @@ def perform_statistical_analysis(model_results):
             print(f"  R2: {result['metrics']['r2']:.4f}")
         
         # Show if this was the best model
-        if result['metrics']['rmse'] == min(rmse_values):
+        if result['metrics']['rmse'] == best_rmse:
             print("  → Best performing model")
 
 def save_analysis_results(model_results):
     """Save analysis results to files"""
     
     # Create results directory if it doesn't exist
-    import os
-    os.makedirs('results', exist_ok=True)
+    os.makedirs(ANALYSIS_CONFIG['output']['results_dir'], exist_ok=True)
     
     # Save detailed report
-    with open('results/analysis_report.txt', 'w') as f:
+    report_path = os.path.join(
+        ANALYSIS_CONFIG['output']['results_dir'], 
+        ANALYSIS_CONFIG['output']['report_file']
+    )
+    
+    with open(report_path, 'w') as f:
         f.write("POSITION ESTIMATION ANALYSIS REPORT\n")
         f.write("="*60 + "\n\n")
         
@@ -246,5 +281,3 @@ def save_analysis_results(model_results):
 
 if __name__ == "__main__":
     run_analysis()
-    
-    print("\nAnalysis complete.")
