@@ -19,29 +19,29 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_categorical=T
     # use PL and RMS features
     if 'PL' in df.columns and 'RMS' in df.columns:
         # Ratio features
-        feature_df['PL_RMS_ratio'] = df['PL'] / (df['RMS'] + 1e-10)
-        feature_df['RMS_PL_ratio'] = df['RMS'] / (df['PL'] + 1e-10)
+        feature_df['PL_RMS_ratio'] = (df['PL'] / (df['RMS'] + 1e-10)).round(3)
+        feature_df['RMS_PL_ratio'] = (df['RMS'] / (df['PL'] + 1e-10)).round(3)
         
         # Product features
-        feature_df['PL_RMS_product'] = df['PL'] * df['RMS']
+        feature_df['PL_RMS_product'] = (df['PL'] * df['RMS']).round(3)
         
         # Difference features
-        feature_df['PL_RMS_diff'] = df['PL'] - df['RMS']
-        feature_df['PL_RMS_abs_diff'] = np.abs(df['PL'] - df['RMS'])
+        feature_df['PL_RMS_diff'] = (df['PL'] - df['RMS']).round(3)
+        feature_df['PL_RMS_abs_diff'] = np.abs(df['PL'] - df['RMS']).round(3)
         
         # Power features
-        feature_df['PL_squared'] = df['PL'] ** 2
-        feature_df['RMS_squared'] = df['RMS'] ** 2
-        feature_df['PL_sqrt'] = np.sqrt(np.abs(df['PL']))
-        feature_df['RMS_sqrt'] = np.sqrt(np.abs(df['RMS']))
+        feature_df['PL_squared'] = (df['PL'] ** 2).round(3)
+        feature_df['RMS_squared'] = (df['RMS'] ** 2).round(3)
+        feature_df['PL_sqrt'] = np.sqrt(np.abs(df['PL'])).round(3)
+        feature_df['RMS_sqrt'] = np.sqrt(np.abs(df['RMS'])).round(3)
         
         # Log features (handle negative values)
-        feature_df['PL_log'] = np.log1p(np.abs(df['PL']))
-        feature_df['RMS_log'] = np.log1p(np.abs(df['RMS']))
+        feature_df['PL_log'] = np.log1p(np.abs(df['PL'])).round(3)
+        feature_df['RMS_log'] = np.log1p(np.abs(df['RMS'])).round(3)
         
         # Exponential features (scaled to prevent overflow)
-        feature_df['PL_exp'] = np.exp(df['PL'] / 100)
-        feature_df['RMS_exp'] = np.exp(df['RMS'] / 10)
+        feature_df['PL_exp'] = np.exp(df['PL'] / 100).round(3)
+        feature_df['RMS_exp'] = np.exp(df['RMS'] / 10).round(3)
     
     # Statistical features
     if 'source_file' in df.columns:
@@ -49,12 +49,12 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_categorical=T
         for feature in features:
             if feature in df.columns:
                 group_stats = df.groupby('source_file')[feature].agg(['mean', 'std', 'min', 'max'])
-                feature_df[f'{feature}_group_mean'] = df['source_file'].map(group_stats['mean'])
-                feature_df[f'{feature}_group_std'] = df['source_file'].map(group_stats['std'])
+                feature_df[f'{feature}_group_mean'] = df['source_file'].map(group_stats['mean']).round(3)
+                feature_df[f'{feature}_group_std'] = df['source_file'].map(group_stats['std']).round(3)
                 feature_df[f'{feature}_normalized'] = (
                     (df[feature] - feature_df[f'{feature}_group_mean']) / 
                     (feature_df[f'{feature}_group_std'] + 1e-10)
-                )
+                ).round(3)
     
     # Interaction features
     if include_categorical and 'PL' in df.columns and 'RMS' in df.columns:
@@ -79,7 +79,16 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_categorical=T
         if col in feature_df.columns:
             feature_df = feature_df.drop(col, axis=1)
 
-    feature_df.to_csv(r'data\processed\feature_df.csv', header=True, index=True)
+    # Round the original features if they exist
+    if 'r' in feature_df.columns:
+        feature_df['r'] = feature_df['r'].round(3)
+    if 'PL' in feature_df.columns:
+        feature_df['PL'] = feature_df['PL'].round(3)
+    if 'RMS' in feature_df.columns:
+        feature_df['RMS'] = feature_df['RMS'].round(3)
+
+    # Save with float_format to ensure all numbers are rounded
+    feature_df.to_csv(r'data\processed\feature_df.csv', header=True, index=True, float_format='%.3f')
     
     return feature_df
 
