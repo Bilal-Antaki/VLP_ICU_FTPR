@@ -2,19 +2,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.training.train_enhanced import train_all_models_enhanced, automated_model_selection
+from src.training.train_sklearn import train_all_models_enhanced, automated_model_selection
 from src.training.train_dl import train_lstm_on_all
 from src.data.loader import load_cir_data, extract_features_and_target
 from src.data.feature_engineering import create_engineered_features, select_features
-from src.evaluation.metrics import print_metrics_report, calculate_all_metrics
-from sklearn.model_selection import train_test_split
 import pandas as pd
 import warnings
 
 warnings.filterwarnings('ignore')
 
-def run_comprehensive_analysis():
-    """Run comprehensive analysis with Linear, SVR, and LSTM models"""
+def run_analysis():
+    """Run analysis with Linear, SVR, and LSTM models"""
     processed_dir = "data/processed"
     
     print("=" * 80)
@@ -26,7 +24,7 @@ def run_comprehensive_analysis():
     df_list = []
     
     # Load all available datasets
-    for keyword in ['FCPR-D1', 'FCPR-D2', 'FCPR-D3', 'ICU-D1', 'ICU-D2', 'ICU-D3']:
+    for keyword in ['FCPR-D1']:
         try:
             df_temp = load_cir_data(processed_dir, filter_keyword=keyword)
             print(f"  Loaded {keyword}: {len(df_temp)} samples")
@@ -44,9 +42,9 @@ def run_comprehensive_analysis():
     print(f"\nTotal samples: {len(df_all)}")
     print(f"Unique sources: {df_all['source_file'].nunique()}")
     
-    # 2. Feature Engineering (NO COORDINATES)
+    # 2. Feature Engineering
     print("\n2. Feature Engineering (PL and RMS features only)...")
-    df_engineered = create_engineered_features(df_all, include_coordinates=False, include_categorical=False)
+    df_engineered = create_engineered_features(df_all, include_categorical=False)
     
     # Select features - exclude any coordinate-based features
     feature_cols = [col for col in df_engineered.columns 
@@ -73,8 +71,8 @@ def run_comprehensive_analysis():
     print("\n4. Training LSTM model...")
     lstm_results = train_lstm_on_all(processed_dir)
     
-    # 5. Create visualization figures (separate windows)
-    create_analysis_figures(results_basic, lstm_results, df_all)
+    # 5. Create visualization figures
+    #create_analysis_figures(results_basic, lstm_results, df_all)
     
     # 6. Statistical Analysis
     print("\n6. Statistical Analysis...")
@@ -251,8 +249,8 @@ def save_analysis_results(sklearn_results, lstm_results, comparison_df):
         
         f.write(f"\nLSTM Performance: RMSE={lstm_results['rmse']:.4f}\n")
 
+
 if __name__ == "__main__":
-    # Run comprehensive analysis
-    run_comprehensive_analysis()
+    run_analysis()
     
-    print("\nAnalysis complete!")
+    print("\nAnalysis complete.")

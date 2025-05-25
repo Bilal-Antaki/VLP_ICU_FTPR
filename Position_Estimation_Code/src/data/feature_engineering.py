@@ -1,10 +1,8 @@
 # src/data/feature_engineering.py
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import PolynomialFeatures
-from scipy import stats
 
-def create_engineered_features(df, features=['PL', 'RMS'], include_coordinates=False, include_categorical=False):
+def create_engineered_features(df, features=['PL', 'RMS'], include_categorical=True):
     """
     Create engineered features for better model performance
     
@@ -19,7 +17,7 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_coordinates=F
     """
     feature_df = df.copy()
     
-    # ONLY use PL and RMS features
+    # use PL and RMS features
     if 'PL' in df.columns and 'RMS' in df.columns:
         # Ratio features
         feature_df['PL_RMS_ratio'] = df['PL'] / (df['RMS'] + 1e-10)

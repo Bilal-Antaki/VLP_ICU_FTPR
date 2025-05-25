@@ -12,4 +12,4 @@ Top Models (Linear and SVR only):
 8. svr_linear: RMSE=449.5048
 9. svr_poly: RMSE=452.6635
 
-LSTM Performance: RMSE=139.1377
+LSTM Performance: RMSE=176.5921
