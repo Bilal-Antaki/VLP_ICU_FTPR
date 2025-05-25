@@ -1,8 +1,18 @@
 POSITION ESTIMATION ANALYSIS REPORT
 ============================================================
 
-Top Models (Linear and SVR only):
-1. linear: RMSE=414.5674
-2. svr: RMSE=425.3168
+Model Performance Summary:
+----------------------------------------
 
-LSTM Performance: RMSE=174.6525
+Model: LSTM (deep_learning)
+  RMSE: 168.2578
+
+Model: linear (sklearn)
+  RMSE: 414.5674
+  MAE: 316.9660
+  R2: 0.3059
+
+Model: svr (sklearn)
+  RMSE: 425.3168
+  MAE: 308.2598
+  R2: 0.2695

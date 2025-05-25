@@ -60,28 +60,61 @@ def run_analysis():
     print(f"  Selected {len(selected_features)} features from {len(feature_cols)} total")
     print(f"  Top features: {selected_features[:10]}")
     
-    # 3. Train models with basic features
-    print("\n3. Training models with BASIC features (PL, RMS only)...")
-    results_basic = train_all_models_enhanced(
+    # 3. Train all models and collect results
+    print("\n3. Training all models...")
+    all_model_results = []
+    
+    # Train traditional ML models
+    sklearn_results = train_all_models_enhanced(
         processed_dir, 
         include_slow_models=False
     )
     
-    # 4. Deep Learning Comparison
-    print("\n4. Training LSTM model...")
+    # Add successful sklearn results to all_model_results
+    for result in sklearn_results:
+        if result['success']:
+            all_model_results.append({
+                'name': result['name'],
+                'type': 'sklearn',
+                'metrics': result['metrics'],
+                'predictions': {
+                    'y_test': result.get('y_test', []),
+                    'y_pred': result.get('y_pred', [])
+                },
+                'training_history': None
+            })
+    
+    # Train and add LSTM results
     lstm_results = train_lstm_on_all(processed_dir)
+    all_model_results.append({
+        'name': 'LSTM',
+        'type': 'deep_learning',
+        'metrics': {
+            'rmse': lstm_results['rmse'],
+            'mae': lstm_results.get('mae', None),
+            'r2': lstm_results.get('r2', None)
+        },
+        'predictions': {
+            'y_test': lstm_results.get('y_test', []),
+            'y_pred': lstm_results.get('y_pred', [])
+        },
+        'training_history': {
+            'train_loss': lstm_results['train_loss'],
+            'val_loss': lstm_results['val_loss']
+        }
+    })
     
-    # 5. Create visualization figures
-    create_analysis_figures(results_basic, lstm_results, df_all)
+    # 4. Create visualization figures
+    #create_analysis_figures(all_model_results, df_all)
     
-    # 6. Statistical Analysis
-    print("\n6. Statistical Analysis...")
-    perform_statistical_analysis(results_basic, lstm_results)
+    # 5. Statistical Analysis
+    print("\n5. Statistical Analysis...")
+    perform_statistical_analysis(all_model_results)
     
-    # 7. Save results
-    save_analysis_results(results_basic, lstm_results)
+    # 6. Save results
+    save_analysis_results(all_model_results)
 
-def create_analysis_figures(sklearn_results, lstm_results, df_raw):
+def create_analysis_figures(model_results, df_raw):
     """Create separate figure windows for different visualizations"""
     
     # Figure 1: Data Exploration
@@ -103,128 +136,112 @@ def create_analysis_figures(sklearn_results, lstm_results, df_raw):
     plt.tight_layout()
     plt.show()
     
-    # Figure 2: Model Performance
-    fig2, ax = plt.subplots(1, 2, figsize=(12, 5))
+    # Figure 2: Model Performance Comparison
+    fig2, axes = plt.subplots(2, 1, figsize=(12, 10), height_ratios=[1, 1])
     fig2.suptitle('Model Performance Comparison', fontsize=16)
     
-    # Model Performance Comparison
-    if sklearn_results:
-        model_names = [r['name'] for r in sklearn_results[:5] if r['success']]
-        rmse_values = [r['metrics']['rmse'] for r in sklearn_results[:5] if r['success']]
-        model_names.append('LSTM')
-        rmse_values.append(lstm_results['rmse'])
-        
-        bars = ax[0].barh(model_names, rmse_values)
-        ax[0].set_xlabel('RMSE')
-        ax[0].set_title('Model Performance by RMSE')
-        bars[np.argmin(rmse_values)].set_color('red')
-        
-        # Error Distribution
-        errors = []
-        labels = []
-        for r in sklearn_results[:5]:
-            if r['success'] and 'y_test' in r and 'y_pred' in r:
-                error = np.abs(np.array(r['y_test']) - np.array(r['y_pred']))
-                errors.append(error)
-                labels.append(r['name'])
-        
-        if errors:
-            ax[1].boxplot(errors, labels=labels)
-            ax[1].set_ylabel('Absolute Error')
-            ax[1].set_title('Error Distribution - Top Models')
-            plt.setp(ax[1].xaxis.get_majorticklabels(), rotation=45, ha='right')
+    # Sort models by RMSE for better visualization
+    model_results.sort(key=lambda x: x['metrics']['rmse'])
     
+    # Model Performance Comparison (RMSE)
+    model_names = [r['name'] for r in model_results]
+    rmse_values = [r['metrics']['rmse'] for r in model_results]
+    
+    bars = axes[0].barh(model_names, rmse_values)
+    axes[0].set_xlabel('RMSE')
+    axes[0].set_title('Model Performance by RMSE')
+    axes[0].grid(True, alpha=0.3)
+    
+    # Color code bars by model type
+    for i, result in enumerate(model_results):
+        if result['type'] == 'deep_learning':
+            bars[i].set_color('red')
+        else:
+            bars[i].set_color('blue')
+    
+    # Training History for models that have it
+    axes[1].set_title('Training History')
+    axes[1].set_xlabel('Epoch')
+    axes[1].set_ylabel('Loss')
+    axes[1].grid(True, alpha=0.3)
+    axes[1].set_yscale('log')
+    
+    for result in model_results:
+        if result['training_history']:
+            if 'train_loss' in result['training_history']:
+                axes[1].plot(
+                    result['training_history']['train_loss'],
+                    label=f"{result['name']} (Train)",
+                    linewidth=2
+                )
+            if 'val_loss' in result['training_history']:
+                axes[1].plot(
+                    result['training_history']['val_loss'],
+                    label=f"{result['name']} (Val)",
+                    linewidth=2,
+                    linestyle='--'
+                )
+    
+    axes[1].legend()
     plt.tight_layout()
     plt.show()
-    
-    # Figure 3: LSTM Training History
-    fig3, ax = plt.subplots(1, 1, figsize=(8, 6))
-    fig3.suptitle('LSTM Training History', fontsize=16)
-    
-    ax.plot(lstm_results['train_loss'], label='Train Loss', linewidth=2)
-    ax.plot(lstm_results['val_loss'], label='Val Loss', linewidth=2)
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Loss')
-    ax.set_title('Training and Validation Loss')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    ax.set_yscale('log')
-    
-    plt.tight_layout()
-    plt.show()
-    
 
-def perform_statistical_analysis(sklearn_results, lstm_results):
+def perform_statistical_analysis(model_results):
     """Perform statistical analysis of results"""
-    
-    if not sklearn_results:
-        return
-    
     print("\n" + "="*60)
     print("STATISTICAL ANALYSIS")
     print("="*60)
     
-    # Extract RMSE values
-    rmse_values = [r['metrics']['rmse'] for r in sklearn_results if r['success']]
-    
-    # Basic statistics
-    print(f"\nModel Performance Statistics:")
-    print(f"  Number of models: {len(rmse_values)}")
+    # Overall statistics
+    rmse_values = [r['metrics']['rmse'] for r in model_results]
+    print(f"\nOverall Model Performance:")
     print(f"  Mean RMSE: {np.mean(rmse_values):.4f}")
-    print(f"  Std RMSE: {np.std(rmse_values):.4f}")
-    print(f"  Min RMSE: {np.min(rmse_values):.4f}")
-    print(f"  Max RMSE: {np.max(rmse_values):.4f}")
-    print(f"  LSTM RMSE: {lstm_results['rmse']:.4f}")
+    print(f"  Best RMSE: {np.min(rmse_values):.4f}")
     
-    # Model type analysis
-    model_types = {
-        'Linear': ['linear', 'ridge', 'lasso', 'elastic', 'poly'],
-        'SVM': ['svr']
-    }
+    # List all models trained
+    model_names = [r['name'] for r in model_results]
+    print(f"\nModels trained: {model_names}")
     
-    print(f"\nPerformance by Model Type:")
-    for type_name, keywords in model_types.items():
-        type_rmses = [r['metrics']['rmse'] for r in sklearn_results 
-                     if r['success'] and any(k in r['name'].lower() for k in keywords)]
-        if type_rmses:
-            print(f"  {type_name}: Mean RMSE = {np.mean(type_rmses):.4f} (n={len(type_rmses)})")
+    # Individual model results
+    print("\nDetailed Model Results:")
+    print("-" * 40)
+    
+    for result in model_results:
+        print(f"\n{result['name']}:")
+        print(f"  RMSE: {result['metrics']['rmse']:.4f}")
+        if result['metrics'].get('mae'):
+            print(f"  MAE: {result['metrics']['mae']:.4f}")
+        if result['metrics'].get('r2'):
+            print(f"  R2: {result['metrics']['r2']:.4f}")
+        
+        # Show if this was the best model
+        if result['metrics']['rmse'] == min(rmse_values):
+            print("  → Best performing model")
 
-def save_analysis_results(sklearn_results, lstm_results):
+def save_analysis_results(model_results):
     """Save analysis results to files"""
     
     # Create results directory if it doesn't exist
     import os
     os.makedirs('results', exist_ok=True)
     
-    # Save detailed results
-    results_summary = {
-        'sklearn_results': [
-            {
-                'name': r['name'],
-                'rmse': r['metrics']['rmse'],
-                'mae': r['metrics']['mae'],
-                'r2': r['metrics']['r2']
-            }
-            for r in sklearn_results if r['success']
-        ],
-        'lstm_results': {
-            'rmse': lstm_results['rmse'],
-            'final_train_loss': lstm_results['train_loss'][-1],
-            'final_val_loss': lstm_results['val_loss'][-1]
-        }
-    }
-    
     # Save detailed report
     with open('results/analysis_report.txt', 'w') as f:
         f.write("POSITION ESTIMATION ANALYSIS REPORT\n")
         f.write("="*60 + "\n\n")
         
-        f.write("Top Models (Linear and SVR only):\n")
-        for i, r in enumerate(sklearn_results[:10]):
-            if r['success']:
-                f.write(f"{i+1}. {r['name']}: RMSE={r['metrics']['rmse']:.4f}\n")
+        # Sort models by RMSE
+        sorted_results = sorted(model_results, key=lambda x: x['metrics']['rmse'])
         
-        f.write(f"\nLSTM Performance: RMSE={lstm_results['rmse']:.4f}\n")
+        f.write("Model Performance Summary:\n")
+        f.write("-"*40 + "\n")
+        for result in sorted_results:
+            f.write(f"\nModel: {result['name']} ({result['type']})\n")
+            f.write(f"  RMSE: {result['metrics']['rmse']:.4f}\n")
+            if result['metrics'].get('mae'):
+                f.write(f"  MAE: {result['metrics']['mae']:.4f}\n")
+            if result['metrics'].get('r2'):
+                f.write(f"  R2: {result['metrics']['r2']:.4f}\n")
 
 
 if __name__ == "__main__":
