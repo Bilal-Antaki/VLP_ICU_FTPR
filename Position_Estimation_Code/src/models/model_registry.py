@@ -1,20 +1,14 @@
 # src/models/model_registry.py
-from .linear import build_linear_model, build_linear_model_simple
-from .svr import build_svr_model, build_svr_optimized, build_svr_linear, build_svr_poly
+from .linear import build_linear_model_simple
+from .svr import build_svr_model, build_svr_optimized
 from .lstm import build_lstm_model
 
 MODEL_REGISTRY = {
     # Linear models
     "linear": build_linear_model_simple,
-    "ridge": lambda **kwargs: build_linear_model(model_type='ridge', **kwargs),
-    "lasso": lambda **kwargs: build_linear_model(model_type='lasso', **kwargs),
-    "elastic": lambda **kwargs: build_linear_model(model_type='elastic', **kwargs),
-    "poly": lambda **kwargs: build_linear_model(model_type='poly', **kwargs),
     
     # SVR models
     "svr": build_svr_optimized,
-    "svr_linear": build_svr_linear,
-    "svr_poly": build_svr_poly,
     "svr_rbf": lambda **kwargs: build_svr_model(kernel='rbf', **kwargs),
     
     # Deep learning models
@@ -42,8 +36,8 @@ def get_model(name: str, **kwargs):
 def list_available_models():
     """List all available models grouped by category"""
     categories = {
-        'Linear': ['linear', 'ridge', 'lasso', 'elastic', 'poly'],
-        'SVM': ['svr', 'svr_linear', 'svr_poly', 'svr_rbf'],
+        'Linear': ['linear'],
+        'SVM': ['svr'],
         'Deep Learning': ['lstm']
     }
     

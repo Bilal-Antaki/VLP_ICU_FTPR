@@ -40,17 +40,3 @@ def build_svr_optimized(**kwargs):
         gamma='auto',      # Auto-select gamma
         **kwargs
     )
-
-def build_svr_linear(**kwargs):
-    """Build linear SVR model"""
-    return build_svr_model(kernel='linear', **kwargs)
-
-def build_svr_poly(**kwargs):
-    """Build polynomial SVR model"""
-    degree = kwargs.get('degree', 3)
-    return build_svr_model(
-        kernel='poly', 
-        degree=degree, 
-        coef0=1,
-        **{k: v for k, v in kwargs.items() if k != 'degree'}
-    )

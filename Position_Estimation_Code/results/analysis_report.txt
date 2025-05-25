@@ -3,13 +3,6 @@ POSITION ESTIMATION ANALYSIS REPORT
 
 Top Models (Linear and SVR only):
 1. linear: RMSE=414.5674
-2. ridge: RMSE=415.0237
-3. ridge: RMSE=424.0028
-4. lasso: RMSE=414.5787
-5. elastic: RMSE=421.7341
-6. poly: RMSE=416.8962
-7. svr: RMSE=425.3168
-8. svr_linear: RMSE=449.5048
-9. svr_poly: RMSE=452.6635
+2. svr: RMSE=425.3168
 
-LSTM Performance: RMSE=176.5921
+LSTM Performance: RMSE=174.6525

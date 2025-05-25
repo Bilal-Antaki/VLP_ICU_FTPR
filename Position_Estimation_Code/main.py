@@ -2,9 +2,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.training.train_sklearn import train_all_models_enhanced, automated_model_selection
+from src.training.train_sklearn import train_all_models_enhanced
 from src.training.train_dl import train_lstm_on_all
-from src.data.loader import load_cir_data, extract_features_and_target
+from src.data.loader import load_cir_data
 from src.data.feature_engineering import create_engineered_features, select_features
 import pandas as pd
 import warnings
@@ -16,7 +16,7 @@ def run_analysis():
     processed_dir = "data/processed"
     
     print("=" * 80)
-    print("COMPREHENSIVE POSITION ESTIMATION ANALYSIS")
+    print(" " * 20 + "COMPREHENSIVE POSITION ESTIMATION ANALYSIS")
     print("=" * 80)
     
     # 1. Load and explore data
@@ -43,8 +43,8 @@ def run_analysis():
     print(f"Unique sources: {df_all['source_file'].nunique()}")
     
     # 2. Feature Engineering
-    print("\n2. Feature Engineering (PL and RMS features only)...")
-    df_engineered = create_engineered_features(df_all, include_categorical=False)
+    print("\n2. Feature Engineering...")
+    df_engineered = create_engineered_features(df_all, include_categorical=True)
     
     # Select features - exclude any coordinate-based features
     feature_cols = [col for col in df_engineered.columns 
@@ -54,7 +54,7 @@ def run_analysis():
     
     X = df_engineered[feature_cols]
     y = df_engineered['r']
-    
+
     # Select best features
     selected_features = select_features(X, y, method='correlation', threshold=0.3)
     print(f"  Selected {len(selected_features)} features from {len(feature_cols)} total")
@@ -62,7 +62,7 @@ def run_analysis():
     
     # 3. Train models with basic features
     print("\n3. Training models with BASIC features (PL, RMS only)...")
-    results_basic, df_basic, _ = train_all_models_enhanced(
+    results_basic = train_all_models_enhanced(
         processed_dir, 
         include_slow_models=False
     )
@@ -72,14 +72,14 @@ def run_analysis():
     lstm_results = train_lstm_on_all(processed_dir)
     
     # 5. Create visualization figures
-    #create_analysis_figures(results_basic, lstm_results, df_all)
+    create_analysis_figures(results_basic, lstm_results, df_all)
     
     # 6. Statistical Analysis
     print("\n6. Statistical Analysis...")
     perform_statistical_analysis(results_basic, lstm_results)
     
     # 7. Save results
-    save_analysis_results(results_basic, lstm_results, df_basic)
+    save_analysis_results(results_basic, lstm_results)
 
 def create_analysis_figures(sklearn_results, lstm_results, df_raw):
     """Create separate figure windows for different visualizations"""
@@ -153,24 +153,6 @@ def create_analysis_figures(sklearn_results, lstm_results, df_raw):
     plt.tight_layout()
     plt.show()
     
-    # Figure 4: Feature Distributions
-    fig4, ax = plt.subplots(1, 2, figsize=(12, 5))
-    fig4.suptitle('Feature Distributions', fontsize=16)
-    
-    ax[0].hist(df_raw['PL'], bins=30, alpha=0.7, label='PL')
-    ax[0].set_xlabel('Path Loss (PL)')
-    ax[0].set_ylabel('Frequency')
-    ax[0].set_title('Path Loss Distribution')
-    ax[0].grid(True, alpha=0.3)
-    
-    ax[1].hist(df_raw['RMS'], bins=30, alpha=0.7, label='RMS', color='orange')
-    ax[1].set_xlabel('RMS Delay Spread')
-    ax[1].set_ylabel('Frequency')
-    ax[1].set_title('RMS Delay Spread Distribution')
-    ax[1].grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.show()
 
 def perform_statistical_analysis(sklearn_results, lstm_results):
     """Perform statistical analysis of results"""
@@ -207,7 +189,7 @@ def perform_statistical_analysis(sklearn_results, lstm_results):
         if type_rmses:
             print(f"  {type_name}: Mean RMSE = {np.mean(type_rmses):.4f} (n={len(type_rmses)})")
 
-def save_analysis_results(sklearn_results, lstm_results, comparison_df):
+def save_analysis_results(sklearn_results, lstm_results):
     """Save analysis results to files"""
     
     # Create results directory if it doesn't exist
@@ -231,11 +213,6 @@ def save_analysis_results(sklearn_results, lstm_results, comparison_df):
             'final_val_loss': lstm_results['val_loss'][-1]
         }
     }
-    
-    # Save to CSV
-    if comparison_df is not None:
-        comparison_df.to_csv('results/model_comparison.csv', index=False)
-        print(f"\nResults saved to results/model_comparison.csv")
     
     # Save detailed report
     with open('results/analysis_report.txt', 'w') as f:

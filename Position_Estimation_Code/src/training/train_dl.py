@@ -191,7 +191,6 @@ def train_lstm_on_all(processed_dir: str, batch_size: int = 32, epochs: int = 30
     full_preds = y_scaler.inverse_transform(full_preds_scaled.reshape(-1, 1)).flatten()
     full_targets = y_scaler.inverse_transform(full_targets_scaled.reshape(-1, 1)).flatten()
     
-    # FINAL RMSE ONLY
     rmse = np.sqrt(np.mean((full_targets - full_preds) ** 2))
     
     print(f"\nFinal Metrics:")

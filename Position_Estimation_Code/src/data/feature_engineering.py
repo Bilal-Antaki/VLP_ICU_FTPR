@@ -8,8 +8,7 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_categorical=T
     
     Args:
         df: Input DataFrame with at least PL and RMS columns
-        features: Base features to use (ONLY PL and RMS)
-        include_coordinates: DEPRECATED - always False
+        features: Base features to use
         include_categorical: Whether to include categorical interaction features
         
     Returns:
@@ -44,7 +43,7 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_categorical=T
         feature_df['PL_exp'] = np.exp(df['PL'] / 100)
         feature_df['RMS_exp'] = np.exp(df['RMS'] / 10)
     
-    # Statistical features (if we have grouped data)
+    # Statistical features
     if 'source_file' in df.columns:
         # Add group statistics
         for feature in features:
@@ -57,7 +56,7 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_categorical=T
                     (feature_df[f'{feature}_group_std'] + 1e-10)
                 )
     
-    # Interaction features (only if requested)
+    # Interaction features
     if include_categorical and 'PL' in df.columns and 'RMS' in df.columns:
         # Binned interactions
         try:
@@ -75,12 +74,12 @@ def create_engineered_features(df, features=['PL', 'RMS'], include_categorical=T
             # Skip if binning fails
             pass
     
-    # Remove any coordinate-based features if they exist
-    coordinate_cols = ['X', 'Y', 'radius', 'angle', 'manhattan_dist', 'quadrant', 
-                      'X_Y_ratio', 'Y_X_ratio', 'X_Y_product', 'X_normalized', 'Y_normalized']
-    for col in coordinate_cols:
+    # Remove any coordinate-based features
+    for col in ['X', 'Y']:
         if col in feature_df.columns:
             feature_df = feature_df.drop(col, axis=1)
+
+    feature_df.to_csv(r'data\processed\feature_df.csv', header=True, index=True)
     
     return feature_df
 
