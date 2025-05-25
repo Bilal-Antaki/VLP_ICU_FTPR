@@ -144,14 +144,13 @@ def run_analysis():
         create_analysis_figures(all_model_results, df_all)
     
     # 5. Statistical Analysis and Results
-    print("\n4. Statistical Analysis and Results")
+    print("\n Results")
     print("=" * 80)
     perform_statistical_analysis(all_model_results)
     
     
     # 6. Save results
     if TRAINING_OPTIONS['save_predictions']:
-        print("\n5. Saving Results...")
         save_analysis_results(all_model_results)
     
     print("\nAnalysis complete.")
