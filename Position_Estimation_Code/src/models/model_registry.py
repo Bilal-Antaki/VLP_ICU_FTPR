@@ -2,6 +2,7 @@
 from .linear import build_linear_model_simple
 from .svr import build_svr_model, build_svr_optimized
 from .lstm import build_lstm_model
+from .lstm_2 import build_lstm_model_2
 
 MODEL_REGISTRY = {
     # Linear models
@@ -11,8 +12,9 @@ MODEL_REGISTRY = {
     "svr": build_svr_optimized,
     "svr_rbf": lambda **kwargs: build_svr_model(kernel='rbf', **kwargs),
     
-    # Deep learning models
+    # RNN models
     "lstm": build_lstm_model,
+    "lstm_2": build_lstm_model_2,
 }
 
 def get_model(name: str, **kwargs):
@@ -38,7 +40,7 @@ def list_available_models():
     categories = {
         'Linear': ['linear'],
         'SVM': ['svr'],
-        'Deep Learning': ['lstm']
+        'RNN': ['lstm']
     }
     
     print("Available Models by Category:")

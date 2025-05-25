@@ -88,7 +88,7 @@ def run_analysis():
     lstm_results = train_lstm_on_all(processed_dir)
     all_model_results.append({
         'name': 'LSTM',
-        'type': 'deep_learning',
+        'type': 'RNN',
         'metrics': {
             'rmse': lstm_results['rmse'],
             'mae': lstm_results.get('mae', None),
@@ -154,7 +154,7 @@ def create_analysis_figures(model_results, df_raw):
     
     # Color code bars by model type
     for i, result in enumerate(model_results):
-        if result['type'] == 'deep_learning':
+        if result['type'] == 'RNN':
             bars[i].set_color('red')
         else:
             bars[i].set_color('blue')
