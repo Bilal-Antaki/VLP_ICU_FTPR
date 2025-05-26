@@ -2,6 +2,7 @@
 from src.models.model_registry import get_model
 from src.data.loader import load_cir_data, extract_features_and_target
 from src.evaluation.metrics import calculate_all_metrics
+from src.config import DATA_CONFIG
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
 import numpy as np
@@ -67,7 +68,8 @@ def train_all_models_enhanced(processed_dir: str, test_size: float = 0.2,
     
     # Load data
     print("Loading data...")
-    df = load_cir_data(processed_dir, filter_keyword="FCPR-D1")
+    df = load_cir_data(processed_dir, filter_keyword=DATA_CONFIG['datasets'][0])
+    print(f"Using dataset: {DATA_CONFIG['datasets'][0]}")
     X, y = extract_features_and_target(df)
     
     print(f"Dataset shape: {X.shape}")

@@ -12,6 +12,7 @@ import pandas as pd
 import warnings
 import os
 import torch
+import time
 
 warnings.filterwarnings('ignore')
 
@@ -56,6 +57,12 @@ def run_analysis():
     print(" " * 20 + "COMPREHENSIVE POSITION ESTIMATION ANALYSIS")
     print("=" * 80)
     
+    # Create results directory if it doesn't exist
+    os.makedirs('results/models', exist_ok=True)
+    
+    # Generate timestamp for this run
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    
     # 1. Load and explore data
     print("\n1. Loading and exploring data...")
     df_list = []
@@ -75,7 +82,6 @@ def run_analysis():
     if df_all is None:
         print("No data found!")
         return
-    
     
     # 2. Feature Engineering
     print("\n2. Feature Engineering...")
@@ -105,8 +111,24 @@ def run_analysis():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     
-    # Train and add LSTM results first
+    # Train and save LSTM results
+    print("\nTraining LSTM model...")
     lstm_results = train_lstm_on_all(DATA_CONFIG['processed_dir'])
+    
+    # Save LSTM model
+    lstm_save_path = f'results/models/lstm_model_{timestamp}_rmse_{lstm_results["rmse"]:.4f}.pth'
+    torch.save({
+        'model_type': 'lstm',
+        'timestamp': timestamp,
+        'rmse': lstm_results['rmse'],
+        'train_loss': lstm_results['train_loss'],
+        'val_loss': lstm_results['val_loss'],
+        'predictions': {
+            'actual': lstm_results['r_actual'],
+            'predicted': lstm_results['r_pred']
+        }
+    }, lstm_save_path)
+    print(f"Saved LSTM model to {lstm_save_path}")
     
     # Clear GPU memory after LSTM
     if torch.cuda.is_available():
@@ -116,9 +138,7 @@ def run_analysis():
         'name': 'lstm',
         'type': 'RNN',
         'metrics': {
-            'rmse': lstm_results['rmse'],
-            'mae': lstm_results.get('mae', None),
-            'r2': lstm_results.get('r2', None)
+            'rmse': lstm_results['rmse']
         },
         'predictions': {
             'y_test': lstm_results['r_actual'],
@@ -130,8 +150,24 @@ def run_analysis():
         } if TRAINING_OPTIONS['plot_training_history'] else None
     })
     
-    # Train GRU with memory cleanup
-    gru_results = train_gru_on_all(DATA_CONFIG['processed_dir'], model_variant="gru")
+    # Train and save GRU model
+    print("\nTraining GRU model...")
+    gru_results = train_gru_on_all(DATA_CONFIG['processed_dir'])
+    
+    # Save GRU model
+    gru_save_path = f'results/models/gru_model_{timestamp}_rmse_{gru_results["rmse"]:.4f}.pth'
+    torch.save({
+        'model_type': 'gru',
+        'timestamp': timestamp,
+        'rmse': gru_results['rmse'],
+        'train_loss': gru_results['train_loss'],
+        'val_loss': gru_results['val_loss'],
+        'predictions': {
+            'actual': gru_results['r_actual'],
+            'predicted': gru_results['r_pred']
+        }
+    }, gru_save_path)
+    print(f"Saved GRU model to {gru_save_path}")
     
     # Clear GPU memory after GRU
     if torch.cuda.is_available():
@@ -141,9 +177,7 @@ def run_analysis():
         'name': 'gru',
         'type': 'RNN',
         'metrics': {
-            'rmse': gru_results['rmse'],
-            'mae': gru_results.get('mae', None),
-            'r2': gru_results.get('r2', None)
+            'rmse': gru_results['rmse']
         },
         'predictions': {
             'y_test': gru_results['r_actual'],
@@ -154,28 +188,40 @@ def run_analysis():
             'val_loss': gru_results['val_loss']
         } if TRAINING_OPTIONS['plot_training_history'] else None
     })
-
-    # Train traditional ML models
+    
+    # Train sklearn models
+    print("\nTraining traditional ML models...")
     sklearn_results = train_all_models_enhanced(
-        DATA_CONFIG['processed_dir'], 
+        DATA_CONFIG['processed_dir'],
         include_slow_models=TRAINING_OPTIONS['include_slow_models']
     )
     
-    # Add successful sklearn results to all_model_results
+    # Save sklearn models
     for result in sklearn_results:
         if result['success']:
+            model_save_path = f'results/models/{result["name"]}_model_{timestamp}_rmse_{result["metrics"]["rmse"]:.4f}.pkl'
+            pd.to_pickle({
+                'model_type': result['name'],
+                'timestamp': timestamp,
+                'metrics': result['metrics'],
+                'predictions': {
+                    'actual': result['y_test'],
+                    'predicted': result['y_pred']
+                }
+            }, model_save_path)
+            print(f"Saved {result['name']} model to {model_save_path}")
+            
             all_model_results.append({
                 'name': result['name'],
                 'type': 'sklearn',
                 'metrics': result['metrics'],
                 'predictions': {
-                    'y_test': result.get('y_test', []),
-                    'y_pred': result.get('y_pred', [])
-                } if TRAINING_OPTIONS['save_predictions'] else None,
-                'training_history': None
+                    'y_test': result['y_test'],
+                    'y_pred': result['y_pred']
+                } if TRAINING_OPTIONS['save_predictions'] else None
             })
     
-    # 4. Create visualization figures - only show model performance comparison
+    # 4. Create visualization figures
     if TRAINING_OPTIONS['plot_training_history']:
         create_analysis_figures(all_model_results, df_all)
     
@@ -184,12 +230,11 @@ def run_analysis():
     print("=" * 80)
     perform_statistical_analysis(all_model_results)
     
-    
     # 6. Save results
     if TRAINING_OPTIONS['save_predictions']:
         save_analysis_results(all_model_results)
     
-    print("\nAnalysis complete.")
+    print("\nAnalysis complete. All models saved in results/models/")
 
 def create_analysis_figures(model_results, df_raw):
     # Figure 1: Model Performance Comparison
@@ -226,7 +271,7 @@ def create_analysis_figures(model_results, df_raw):
     axes[1].set_yscale('log')
     
     for result in model_results:
-        if result['training_history']:
+        if result.get('training_history') and result['type'] == 'RNN':
             if 'train_loss' in result['training_history']:
                 axes[1].plot(
                     result['training_history']['train_loss'],

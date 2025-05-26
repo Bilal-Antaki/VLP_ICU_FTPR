@@ -5,23 +5,31 @@ from sklearn.model_selection import train_test_split
 from src.models.model_registry import get_model
 from src.data.loader import load_cir_data
 from src.data.preprocessing import scale_and_sequence
+from src.config import DATA_CONFIG
 import numpy as np
 import pandas as pd
+import random
+import time
 
 def train_lstm_on_all(processed_dir: str, batch_size: int = 32, epochs: int = 300, lr: float = 0.01):
-    # Set random seeds for reproducibility - different seed than GRU
-    torch.manual_seed(24)  # Different seed than GRU's 42
-    torch.cuda.manual_seed(24)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(24)
+    # Generate random seed based on current time
+    random_seed = int(time.time() * 1000) % 100000
+    print(f"Using random seed: {random_seed}")
+    
+    # Set random seeds
+    torch.manual_seed(random_seed)
+    torch.cuda.manual_seed(random_seed)
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.benchmark = True
+    np.random.seed(random_seed)
+    random.seed(random_seed)
     
     # Use longer sequences for better temporal patterns
     seq_len = 10
     
-    # Load data
-    df = load_cir_data(processed_dir, filter_keyword="FCPR-D1")
-    print(f"Loaded {len(df)} data points")
+    # Load data using dataset from config
+    df = load_cir_data(processed_dir, filter_keyword=DATA_CONFIG['datasets'][0])
+    print(f"Loaded {len(df)} data points from {DATA_CONFIG['datasets'][0]}")
     
     # Check data distribution
     print(f"Target (r) statistics:")
