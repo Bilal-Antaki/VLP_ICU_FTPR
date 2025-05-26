@@ -194,9 +194,8 @@ def run_analysis():
 def create_analysis_figures(model_results, df_raw):
     # Figure 1: Model Performance Comparison
     fig1, axes = plt.subplots(
-        2, 1, 
-        figsize=ANALYSIS_CONFIG['visualization']['figure_sizes']['model_comparison'], 
-        height_ratios=ANALYSIS_CONFIG['visualization']['height_ratios']
+        1, 2, 
+        figsize=ANALYSIS_CONFIG['visualization']['figure_sizes']['model_comparison']
     )
     fig1.suptitle('Model Performance Comparison', fontsize=16)
     

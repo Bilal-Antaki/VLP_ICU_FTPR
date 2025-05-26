@@ -60,7 +60,7 @@ ANALYSIS_CONFIG = {
     'visualization': {
         'figure_sizes': {
             'data_exploration': (12, 5),
-            'model_comparison': (12, 10)
+            'model_comparison': (17, 6)
         },
         'height_ratios': [1, 1],
         'scatter_alpha': 0.6,
@@ -75,7 +75,7 @@ ANALYSIS_CONFIG = {
 
 # Model Training Options
 TRAINING_OPTIONS = {
-    'include_slow_models': False,  # Whether to include computationally intensive models
+    'include_slow_models': True,  # Whether to include computationally intensive models
     'save_predictions': True,      # Whether to save model predictions
-    'plot_training_history': False  # Whether to plot training history for applicable models
+    'plot_training_history': True  # Whether to plot training history for applicable models
 }
