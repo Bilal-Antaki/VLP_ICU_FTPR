@@ -175,3 +175,40 @@ def plot_model_results(pl_values, r_actual, r_pred_linear, r_pred_lstm, train_lo
     """Legacy function - use plot_model_results_fixed instead"""
     print("Warning: Using legacy plot function. Use plot_model_results_fixed(processed_dir) instead.")
     plot_model_results_fixed("data/processed")
+
+def plot_actual_vs_estimated(y_true, y_pred, model_name="Model"):
+    """
+    Create a scatter plot of actual vs estimated r values
+    
+    Args:
+        y_true: Array of actual r values
+        y_pred: Array of predicted r values
+        model_name: Name of the model for the plot title
+    """
+    plt.figure(figsize=(10, 8))
+    
+    # Create scatter plot
+    plt.scatter(y_true, y_pred, alpha=0.6, label=f"{model_name} Predictions")
+    
+    # Add perfect prediction line
+    min_val = min(y_true.min(), y_pred.min())
+    max_val = max(y_true.max(), y_pred.max())
+    plt.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.5, label='Perfect Prediction')
+    
+    # Calculate RMSE
+    rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
+    
+    # Add labels and title
+    plt.xlabel("Actual r")
+    plt.ylabel("Estimated r")
+    plt.title(f"{model_name}: Actual vs Estimated r Values\nRMSE: {rmse:.4f}")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Make plot square
+    plt.axis('equal')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    return rmse

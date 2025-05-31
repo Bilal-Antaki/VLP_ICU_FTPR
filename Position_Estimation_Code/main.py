@@ -1,18 +1,17 @@
-# main.py
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
+from src.data.feature_engineering import create_engineered_features, select_features
+from src.config import DATA_CONFIG, ANALYSIS_CONFIG, TRAINING_OPTIONS
 from src.training.train_sklearn import train_all_models_enhanced
 from src.training.train_lstm import train_lstm_on_all
 from src.training.train_gru import train_gru_on_all
 from src.data.loader import load_cir_data
-from src.data.feature_engineering import create_engineered_features, select_features
-from src.config import DATA_CONFIG, ANALYSIS_CONFIG, TRAINING_OPTIONS
+from src.utils.visualizations import plot_actual_vs_estimated
+import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 import warnings
-import os
 import torch
 import time
+import os
 
 warnings.filterwarnings('ignore')
 
@@ -115,6 +114,15 @@ def run_analysis():
     print("\nTraining LSTM model...")
     lstm_results = train_lstm_on_all(DATA_CONFIG['processed_dir'])
     
+    # Plot LSTM actual vs estimated
+    if TRAINING_OPTIONS['save_predictions']:
+        print("\nPlotting LSTM actual vs estimated values...")
+        plot_actual_vs_estimated(
+            np.array(lstm_results['r_actual']),
+            np.array(lstm_results['r_pred']),
+            model_name="LSTM"
+        )
+    
     # Save LSTM model
     lstm_save_path = f'results/models/lstm_model_{timestamp}_rmse_{lstm_results["rmse"]:.4f}.pth'
     torch.save({
@@ -153,6 +161,15 @@ def run_analysis():
     # Train and save GRU model
     print("\nTraining GRU model...")
     gru_results = train_gru_on_all(DATA_CONFIG['processed_dir'])
+    
+    # Plot GRU actual vs estimated
+    if TRAINING_OPTIONS['save_predictions']:
+        print("\nPlotting GRU actual vs estimated values...")
+        plot_actual_vs_estimated(
+            np.array(gru_results['r_actual']),
+            np.array(gru_results['r_pred']),
+            model_name="GRU"
+        )
     
     # Save GRU model
     gru_save_path = f'results/models/gru_model_{timestamp}_rmse_{gru_results["rmse"]:.4f}.pth'
@@ -196,7 +213,7 @@ def run_analysis():
         include_slow_models=TRAINING_OPTIONS['include_slow_models']
     )
     
-    # Save sklearn models
+    # Save sklearn models and plot actual vs estimated
     for result in sklearn_results:
         if result['success']:
             model_save_path = f'results/models/{result["name"]}_model_{timestamp}_rmse_{result["metrics"]["rmse"]:.4f}.pkl'
@@ -210,6 +227,15 @@ def run_analysis():
                 }
             }, model_save_path)
             print(f"Saved {result['name']} model to {model_save_path}")
+            
+            # Plot actual vs estimated for sklearn models
+            if TRAINING_OPTIONS['save_predictions']:
+                print(f"\nPlotting {result['name']} actual vs estimated values...")
+                plot_actual_vs_estimated(
+                    result['y_test'],
+                    result['y_pred'],
+                    model_name=result['name']
+                )
             
             all_model_results.append({
                 'name': result['name'],
