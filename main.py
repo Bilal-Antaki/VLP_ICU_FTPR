@@ -383,7 +383,6 @@ def save_analysis_results(model_results):
             if result['metrics'].get('r2'):
                 f.write(f"  R2: {result['metrics']['r2']:.4f}\n")
 
+
 if __name__ == "__main__":
     run_analysis()
-
-    print("Analysis complete. All results saved in results/models/")
