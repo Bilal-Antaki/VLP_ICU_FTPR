@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from src.data.loader import load_cir_data
@@ -11,75 +12,158 @@ import random
 import time
 import math
 
-class ImprovedGRUModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers=2, dropout=0.3, output_activation=None):
-        super(ImprovedGRUModel, self).__init__()
+class MixtureGRUModel(nn.Module):
+    def __init__(self, input_dim=2, hidden_dim=256, num_layers=3, num_mixtures=10, dropout=0.4):
+        super(MixtureGRUModel, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
-        self.dropout_rate = dropout
+        self.num_mixtures = num_mixtures
         
-        # Multi-layer GRU with dropout
+        # Increase capacity for better range handling
         self.gru = nn.GRU(
             input_dim, 
             hidden_dim,
             num_layers=num_layers,
             batch_first=True,
             dropout=dropout if num_layers > 1 else 0,
-            bidirectional=False
+            bidirectional=True
         )
         
-        # Dropout layer after GRU
-        self.dropout = nn.Dropout(dropout)
+        # Range predictor with wider range
+        self.range_predictor = nn.Sequential(
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, 2)  # Predict min and max
+        )
         
-        # Multi-layer output head with residual connection
-        self.fc1 = nn.Linear(hidden_dim, hidden_dim // 2)
-        self.fc2 = nn.Linear(hidden_dim // 2, hidden_dim // 4)
-        self.fc_out = nn.Linear(hidden_dim // 4, 1)
+        # Attention with range awareness
+        self.attention = nn.Sequential(
+            nn.Linear(hidden_dim * 2 + 2, hidden_dim),  # +2 for range info
+            nn.Tanh(),
+            nn.Linear(hidden_dim, 1)
+        )
         
-        # Batch normalization
-        self.bn1 = nn.BatchNorm1d(hidden_dim // 2)
-        self.bn2 = nn.BatchNorm1d(hidden_dim // 4)
+        # Mixture parameters with range awareness
+        self.mixture_layer = nn.Sequential(
+            nn.Linear(hidden_dim * 2 + 2, hidden_dim * 2),  # +2 for range info
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, num_mixtures * 3)
+        )
         
-        # Activation functions
-        self.relu = nn.ReLU()
-        self.leaky_relu = nn.LeakyReLU(0.1)
-        self.output_activation = output_activation
-        
-        # Skip connection
-        self.skip_connection = nn.Linear(hidden_dim, 1)
+        # Value range embeddings
+        self.range_embedding = nn.Sequential(
+            nn.Linear(2, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
         
     def forward(self, x):
+        batch_size = x.size(0)
+        
         # GRU forward pass
-        gru_out, hidden = self.gru(x)
+        gru_out, _ = self.gru(x)
         
-        # Use last hidden state
-        last_hidden = gru_out[:, -1, :]  # [batch_size, hidden_dim]
+        # Predict value range with extended range
+        range_context = torch.mean(gru_out, dim=1)
+        predicted_range = self.range_predictor(range_context)
+        range_min, range_max = predicted_range[:, 0], predicted_range[:, 1]
         
-        # Apply dropout
-        last_hidden = self.dropout(last_hidden)
+        # Add padding to range to allow for higher values
+        range_span = range_max - range_min
+        range_min = range_min - range_span * 0.2  # Increase lower padding
+        range_max = range_max + range_span * 0.3  # Increase upper padding more
+        range_span = range_max - range_min  # Recalculate span
         
-        # Multi-layer output head
-        out1 = self.leaky_relu(self.bn1(self.fc1(last_hidden)))
-        out1 = self.dropout(out1)
+        # Create range embeddings
+        range_info = torch.stack([range_min, range_max], dim=1)
+        range_embed = self.range_embedding(range_info)
         
-        out2 = self.leaky_relu(self.bn2(self.fc2(out1)))
-        out2 = self.dropout(out2)
+        # Attention with range awareness
+        range_expanded = range_info.unsqueeze(1).expand(-1, gru_out.size(1), -1)
+        attention_input = torch.cat([gru_out, range_expanded], dim=2)
+        attention_weights = F.softmax(self.attention(attention_input), dim=1)
+        context = torch.sum(attention_weights * gru_out, dim=1)
         
-        main_output = self.fc_out(out2)
+        # Add range information to context
+        context_with_range = torch.cat([context, range_info], dim=1)
         
-        # Skip connection for better gradient flow
-        skip_output = self.skip_connection(last_hidden)
+        # Generate mixture parameters with range awareness
+        mixture_params = self.mixture_layer(context_with_range)
         
-        # Combine outputs
-        final_output = main_output + 0.1 * skip_output
+        # Split and process mixture parameters
+        means = mixture_params[:, :self.num_mixtures]
+        stds = F.softplus(mixture_params[:, self.num_mixtures:2*self.num_mixtures]) + 1e-3
+        weights = F.softmax(mixture_params[:, 2*self.num_mixtures:], dim=1)
         
-        if self.output_activation:
-            final_output = self.output_activation(final_output)
+        # Scale means with more aggressive range
+        means = range_min.unsqueeze(1) + F.sigmoid(means) * range_span.unsqueeze(1) * 1.2
+        # Scale stds based on range span with increased variation
+        stds = stds * range_span.unsqueeze(1) * 0.15
+        
+        if self.training:
+            # Sample from mixture during training
+            component_idx = torch.multinomial(weights, 1).squeeze()
+            selected_means = means[torch.arange(batch_size), component_idx]
+            selected_stds = stds[torch.arange(batch_size), component_idx]
             
-        return final_output
+            # Add noise scaled by the range with increased variation
+            noise = torch.randn_like(selected_means) * selected_stds * 1.2
+            predictions = selected_means + noise
+            
+            # Allow predictions to go beyond the range more during training
+            predictions = torch.clamp(predictions, 
+                                   min=range_min - range_span * 0.2,
+                                   max=range_max + range_span * 0.3)
+        else:
+            # During inference, use weighted average with controlled randomness
+            predictions = torch.sum(weights.unsqueeze(-1) * means.unsqueeze(-1), dim=1).squeeze()
+            avg_std = torch.sum(weights * stds, dim=1)
+            
+            # Add scaled noise during inference with more variation
+            noise = torch.randn_like(predictions) * avg_std * 1.2
+            predictions = predictions + noise
+            
+            # Allow predictions to go beyond the range more during inference
+            predictions = torch.clamp(predictions, 
+                                   min=range_min - range_span * 0.2,
+                                   max=range_max + range_span * 0.3)
+        
+        return predictions, means, stds, weights, range_min, range_max
+
+class MixtureLoss(nn.Module):
+    def __init__(self, range_weight=0.15):  # Reduced range weight to allow more flexibility
+        super(MixtureLoss, self).__init__()
+        self.range_weight = range_weight
+    
+    def forward(self, predictions, targets, means, stds, weights, range_min, range_max):
+        # Basic mixture loss
+        exponents = -0.5 * ((targets.unsqueeze(1) - means) / stds) ** 2
+        component_probs = (1.0 / (stds * math.sqrt(2 * math.pi))) * torch.exp(exponents)
+        weighted_probs = weights * component_probs
+        nll = -torch.log(torch.sum(weighted_probs, dim=1) + 1e-10)
+        
+        # Range prediction loss with more flexibility
+        batch_min = targets.min()
+        batch_max = targets.max()
+        range_loss = F.smooth_l1_loss(range_min, batch_min) + F.smooth_l1_loss(range_max, batch_max)
+        
+        # Add MSE loss for stability
+        mse = F.smooth_l1_loss(predictions, targets)  # Changed to smooth L1 loss
+        
+        # Enhanced diversity loss
+        diversity_loss = -torch.mean(torch.std(means, dim=1)) - 0.1 * torch.mean(torch.abs(means[:, 1:] - means[:, :-1]))
+        
+        # Combine losses with adjusted weights
+        total_loss = nll.mean() + 0.15 * mse + self.range_weight * range_loss + 0.15 * diversity_loss
+        return total_loss
 
 def train_gru_on_all(processed_dir: str, model_variant: str = "gru", 
-                     batch_size: int = 64, epochs: int = 300, 
+                     batch_size: int = 32, epochs: int = 300, 
                      lr: float = 0.001, seq_len: int = 15):
     """
     Train GRU model with specific optimizations for position estimation
@@ -124,21 +208,27 @@ def train_gru_on_all(processed_dir: str, model_variant: str = "gru",
         drop_last=False
     )
     
-    # Create model with random initialization
-    model = ImprovedGRUModel(input_dim=2, hidden_dim=128, num_layers=2, dropout=0.3)
+    # Create model with mixture outputs
+    model = MixtureGRUModel(
+        input_dim=2,
+        hidden_dim=256,
+        num_layers=3,
+        num_mixtures=10,
+        dropout=0.4
+    )
     
-    # Initialize weights with Xavier/Glorot initialization
+    # Initialize weights
     def init_weights(m):
         if isinstance(m, nn.GRU):
             for name, param in m.named_parameters():
                 if 'weight' in name:
-                    nn.init.xavier_uniform_(param)
+                    nn.init.orthogonal_(param)  # Use orthogonal initialization
                 elif 'bias' in name:
-                    nn.init.constant_(param, 0.0)
+                    nn.init.uniform_(param, -0.1, 0.1)
         elif isinstance(m, nn.Linear):
-            nn.init.xavier_uniform_(m.weight)
+            nn.init.orthogonal_(m.weight)
             if m.bias is not None:
-                nn.init.constant_(m.bias, 0.0)
+                nn.init.uniform_(m.bias, -0.1, 0.1)
     
     model.apply(init_weights)
     
@@ -148,19 +238,25 @@ def train_gru_on_all(processed_dir: str, model_variant: str = "gru",
     print(f"Using device: {device}")
     print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
     
-    # Loss and optimizer with adjusted parameters
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(
-        model.parameters(), 
-        lr=lr, 
-        weight_decay=1e-5,
-        betas=(0.9, 0.999),  # Default Adam betas
-        eps=1e-8  # Default Adam epsilon
+    # Use mixture loss
+    criterion = MixtureLoss(range_weight=0.15).to(device)
+    
+    # Use Lion optimizer for better convergence
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=lr,
+        weight_decay=1e-4,
+        betas=(0.9, 0.99)
     )
     
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=10,
-        min_lr=1e-6  # Add minimum learning rate
+    # Use OneCycle learning rate scheduler
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=lr,
+        epochs=epochs,
+        steps_per_epoch=len(train_loader),
+        pct_start=0.3,
+        anneal_strategy='cos'
     )
     
     train_loss_hist = []
@@ -179,14 +275,16 @@ def train_gru_on_all(processed_dir: str, model_variant: str = "gru",
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
             
             optimizer.zero_grad()
-            preds = model(X_batch)
-            loss = criterion(preds, y_batch)
+            preds, means, stds, weights, range_min, range_max = model(X_batch)
+            loss = criterion(preds, y_batch, means, stds, weights, range_min, range_max)
             loss.backward()
             
             # Gradient clipping
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             
             optimizer.step()
+            scheduler.step()
+            
             train_loss += loss.item()
             train_batches += 1
         
@@ -201,8 +299,8 @@ def train_gru_on_all(processed_dir: str, model_variant: str = "gru",
         with torch.no_grad():
             for X_batch, y_batch in val_loader:
                 X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-                preds = model(X_batch)
-                loss = criterion(preds, y_batch)
+                preds, means, stds, weights, range_min, range_max = model(X_batch)
+                loss = criterion(preds, y_batch, means, stds, weights, range_min, range_max)
                 val_loss += loss.item()
                 val_batches += 1
                 
@@ -212,9 +310,6 @@ def train_gru_on_all(processed_dir: str, model_variant: str = "gru",
         val_loss /= val_batches
         train_loss_hist.append(train_loss)
         val_loss_hist.append(val_loss)
-        
-        # Learning rate scheduling
-        scheduler.step(val_loss)
         
         # Early stopping
         if val_loss < best_val_loss:
@@ -236,7 +331,7 @@ def train_gru_on_all(processed_dir: str, model_variant: str = "gru",
     # Generate predictions on full dataset
     model.eval()
     with torch.no_grad():
-        full_preds_scaled = model(X_seq.to(device)).cpu().numpy()
+        full_preds_scaled = model(X_seq.to(device))[0].cpu().numpy()
         full_targets_scaled = y_seq.numpy()
     
     # Inverse transform
@@ -268,7 +363,7 @@ if __name__ == "__main__":
     # Example usage with your data
     results = train_gru_on_all(
         processed_dir="your_data_directory",
-        batch_size=64,
+        batch_size=32,
         epochs=300,
         lr=0.001,
         seq_len=15
