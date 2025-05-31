@@ -385,3 +385,5 @@ def save_analysis_results(model_results):
 
 if __name__ == "__main__":
     run_analysis()
+
+    print("Analysis complete. All results saved in results/models/")
