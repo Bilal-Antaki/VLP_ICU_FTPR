@@ -25,7 +25,7 @@ GRU_CONFIG = {
 TRAINING_CONFIG = {
     'learning_rate': 0.001,
     'batch_size': 8,
-    'epochs': 250,
+    'epochs': 300,
     'train_simulations': 19,
     'weight_decay': 1e-5,
     'validation_split': 0.2,
